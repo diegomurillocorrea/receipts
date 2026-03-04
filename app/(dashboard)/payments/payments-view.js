@@ -199,8 +199,9 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
   const dateInputRef = useRef(null);
   const paymentMethods = initialPaymentMethods ?? [];
 
-  const canSeeEstado = userEmail === ALLOWED_ADMIN_EMAIL;
-  const canSeeProofActions = userEmail === ALLOWED_ADMIN_EMAIL;
+  const isAdmin = userEmail === ALLOWED_ADMIN_EMAIL;
+  const canSeeEstado = isAdmin;
+  const canSeeProofActions = isAdmin;
 
   useEffect(() => {
     const supabase = createClient();
@@ -739,8 +740,8 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
           onSubmit={handleSubmit}
           className="flex flex-col gap-4"
         >
-          {/* Fila 1: Recibo · Método de pago · Fecha */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Fila 1: admin → 3 cols (Recibo · Método · Fecha) | no-admin → 2 cols (Recibo · Método) */}
+          <div className={`grid grid-cols-1 gap-4 ${canSeeEstado ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
           <div ref={comboboxRef} className="relative min-w-0">
             <label
               htmlFor="payment-receipt-search"
@@ -844,25 +845,27 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
               ))}
             </select>
           </div>
-          <div className="w-full">
-            <label
-              htmlFor="payment-created-at"
-              className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-            >
-              Fecha
-            </label>
-            <input
-              id="payment-created-at"
-              type="date"
-              value={createdAt}
-              onChange={(e) => setCreatedAt(e.target.value)}
-              disabled={isSubmitting}
-              className={inputClass}
-              aria-label="Fecha del pago"
-            />
+          {canSeeEstado && (
+            <div className="w-full">
+              <label
+                htmlFor="payment-created-at"
+                className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              >
+                Fecha
+              </label>
+              <input
+                id="payment-created-at"
+                type="date"
+                value={createdAt}
+                onChange={(e) => setCreatedAt(e.target.value)}
+                disabled={isSubmitting}
+                className={inputClass}
+                aria-label="Fecha del pago"
+              />
+            </div>
+          )}
           </div>
-          </div>
-          {/* Fila 2: Estado · Monto */}
+          {/* Fila 2: admin → Estado · Monto | no-admin → Fecha · Monto */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {canSeeEstado && (
             <div className="w-full">
@@ -883,6 +886,25 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                 <option value={PAYMENT_STATUS_PENDING}>{STATUS_LABELS[PAYMENT_STATUS_PENDING]}</option>
                 <option value={PAYMENT_STATUS_PAID}>{STATUS_LABELS[PAYMENT_STATUS_PAID]}</option>
               </select>
+            </div>
+          )}
+          {!canSeeEstado && (
+            <div className="w-full">
+              <label
+                htmlFor="payment-created-at"
+                className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              >
+                Fecha
+              </label>
+              <input
+                id="payment-created-at"
+                type="date"
+                value={createdAt}
+                onChange={(e) => setCreatedAt(e.target.value)}
+                disabled={isSubmitting}
+                className={inputClass}
+                aria-label="Fecha del pago"
+              />
             </div>
           )}
           <div className="w-full">
@@ -1030,39 +1052,43 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                     </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-3 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => handleEditPayment(payment)}
-                      className="text-sm font-medium text-emerald-600 underline-offset-2 hover:underline dark:text-emerald-400"
-                      aria-label={`Editar pago de ${getPaymentReceiptDisplay(payment)}`}
-                    >
-                      Editar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteClick(payment)}
-                      className="text-sm font-medium text-red-600 underline-offset-2 hover:underline dark:text-red-400"
-                      aria-label={`Eliminar pago de ${getPaymentReceiptDisplay(payment)}`}
-                    >
-                      Eliminar
-                    </button>
-                    {whatsappUrl ? (
-                      <a
-                        href={whatsappUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm font-medium text-cyan-500 hover:underline dark:text-cyan-400"
-                        aria-label={`Enviar comprobante por WhatsApp a ${getPaymentReceiptDisplay(payment)}`}
-                      >
-                        Comprobante
-                      </a>
-                    ) : (
-                      <span
-                        className="text-sm text-zinc-400 dark:text-zinc-500"
-                        title={hasPhone ? "Número de teléfono inválido" : "No hay número de teléfono para este cliente"}
-                      >
-                        Comprobante
-                      </span>
+                    {isAdmin && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleEditPayment(payment)}
+                          className="text-sm font-medium text-emerald-600 underline-offset-2 hover:underline dark:text-emerald-400"
+                          aria-label={`Editar pago de ${getPaymentReceiptDisplay(payment)}`}
+                        >
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteClick(payment)}
+                          className="text-sm font-medium text-red-600 underline-offset-2 hover:underline dark:text-red-400"
+                          aria-label={`Eliminar pago de ${getPaymentReceiptDisplay(payment)}`}
+                        >
+                          Eliminar
+                        </button>
+                        {whatsappUrl ? (
+                          <a
+                            href={whatsappUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm font-medium text-cyan-500 hover:underline dark:text-cyan-400"
+                            aria-label={`Enviar comprobante por WhatsApp a ${getPaymentReceiptDisplay(payment)}`}
+                          >
+                            Comprobante
+                          </a>
+                        ) : (
+                          <span
+                            className="text-sm text-zinc-400 dark:text-zinc-500"
+                            title={hasPhone ? "Número de teléfono inválido" : "No hay número de teléfono para este cliente"}
+                          >
+                            Comprobante
+                          </span>
+                        )}
+                      </>
                     )}
                     {getProofPublicUrl(payment) ? (
                       <>
@@ -1163,39 +1189,43 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                       </td>
                       <td className="px-4 py-3.5 tablet:px-6">
                         <div className="flex flex-wrap items-center gap-3">
-                          <button
-                            type="button"
-                            onClick={() => handleEditPayment(payment)}
-                            className="font-medium text-emerald-600 underline-offset-2 hover:underline dark:text-emerald-400"
-                            aria-label={`Editar pago de ${getPaymentReceiptDisplay(payment)}`}
-                          >
-                            Editar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteClick(payment)}
-                            className="font-medium text-red-600 underline-offset-2 hover:underline dark:text-red-400"
-                            aria-label={`Eliminar pago de ${getPaymentReceiptDisplay(payment)}`}
-                          >
-                            Eliminar
-                          </button>
-                          {whatsappUrl ? (
-                            <a
-                              href={whatsappUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="font-medium text-cyan-500 hover:underline dark:text-cyan-400"
-                              aria-label={`Enviar comprobante por WhatsApp a ${getPaymentReceiptDisplay(payment)}`}
-                            >
-                              Comprobante
-                            </a>
-                          ) : (
-                            <span
-                              className="text-zinc-400 dark:text-zinc-500"
-                              title={hasPhone ? "Número de teléfono inválido" : "No hay número de teléfono para este cliente"}
-                            >
-                              Comprobante
-                            </span>
+                          {isAdmin && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleEditPayment(payment)}
+                                className="font-medium text-emerald-600 underline-offset-2 hover:underline dark:text-emerald-400"
+                                aria-label={`Editar pago de ${getPaymentReceiptDisplay(payment)}`}
+                              >
+                                Editar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteClick(payment)}
+                                className="font-medium text-red-600 underline-offset-2 hover:underline dark:text-red-400"
+                                aria-label={`Eliminar pago de ${getPaymentReceiptDisplay(payment)}`}
+                              >
+                                Eliminar
+                              </button>
+                              {whatsappUrl ? (
+                                <a
+                                  href={whatsappUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="font-medium text-cyan-500 hover:underline dark:text-cyan-400"
+                                  aria-label={`Enviar comprobante por WhatsApp a ${getPaymentReceiptDisplay(payment)}`}
+                                >
+                                  Comprobante
+                                </a>
+                              ) : (
+                                <span
+                                  className="text-zinc-400 dark:text-zinc-500"
+                                  title={hasPhone ? "Número de teléfono inválido" : "No hay número de teléfono para este cliente"}
+                                >
+                                  Comprobante
+                                </span>
+                              )}
+                            </>
                           )}
                           {getProofPublicUrl(payment) ? (
                             <>
