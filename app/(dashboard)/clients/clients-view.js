@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
 import {
   createClientAction,
@@ -51,8 +51,20 @@ export function ClientsView({ initialClients, fetchError }) {
   const [isLinking, setIsLinking] = useState(false);
   const [unlinkingReceiptId, setUnlinkingReceiptId] = useState(null);
   const [pendingServices, setPendingServices] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const isEditing = formOpen && formOpen !== "create";
+
+  const filteredClients = useMemo(() => {
+    if (!searchQuery.trim()) return clients;
+    const q = searchQuery.trim().toLowerCase();
+    return clients.filter((c) => {
+      const name = (c.name ?? "").toLowerCase();
+      const lastName = (c.last_name ?? "").toLowerCase();
+      const phone = (c.phone_number ?? "").toString();
+      return name.includes(q) || lastName.includes(q) || phone.includes(q);
+    });
+  }, [clients, searchQuery]);
 
   useEffect(() => {
     if (!formOpen) {
@@ -290,6 +302,37 @@ export function ClientsView({ initialClients, fetchError }) {
         </div>
       )}
 
+      {clients.length > 0 && (
+        <div className="relative">
+          <label htmlFor="client-search" className="sr-only">
+            Buscar por nombre, apellido o teléfono
+          </label>
+          <input
+            id="client-search"
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Buscar por nombre, apellido o teléfono..."
+            className="w-full rounded-xl border border-zinc-300 bg-white pl-10 pr-4 py-2.5 text-zinc-900 placeholder-zinc-400 transition-all duration-200 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-500 dark:focus:border-emerald-400 dark:focus:ring-emerald-500/30"
+            aria-label="Buscar clientes por nombre, apellido o teléfono"
+          />
+          <svg
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 dark:text-zinc-500"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+        </div>
+      )}
+
       <div className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <div className="border-b border-zinc-200/80 bg-zinc-50/50 px-4 py-3.5 dark:border-zinc-800 dark:bg-zinc-800/30 tablet:px-6">
           <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
@@ -311,9 +354,23 @@ export function ClientsView({ initialClients, fetchError }) {
               Agregar cliente
             </button>
           </div>
+        ) : filteredClients.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-5 px-4 py-20 text-center">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              No se encontraron clientes con ese criterio de búsqueda.
+            </p>
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-300 bg-white px-5 text-sm font-medium text-zinc-700 transition-all hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              aria-label="Limpiar búsqueda"
+            >
+              Limpiar búsqueda
+            </button>
+          </div>
         ) : isMobile ? (
           <ul className="divide-y divide-zinc-200/80 dark:divide-zinc-800" role="list">
-            {clients.map((client) => (
+            {filteredClients.map((client) => (
               <li
                 key={client.id}
                 className="flex flex-col gap-2 px-4 py-4 first:pt-4 last:pb-4 tablet:px-6"
@@ -381,7 +438,7 @@ export function ClientsView({ initialClients, fetchError }) {
                 </tr>
               </thead>
               <tbody>
-                {clients.map((client) => (
+                {filteredClients.map((client) => (
                   <tr
                     key={client.id}
                     className="border-b border-zinc-100 last:border-0 transition-colors hover:bg-zinc-50/50 dark:border-zinc-800 dark:hover:bg-zinc-800/30"
