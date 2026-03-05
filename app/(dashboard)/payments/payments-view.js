@@ -491,9 +491,12 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
     }
     setIsSubmitting(true);
     
-    const created_at_iso = createdAt
-      ? new Date(createdAt + "T12:00:00").toISOString()
-      : null;
+    const created_at_iso = (() => {
+      if (!createdAt) return null;
+      const now = new Date();
+      const [year, month, day] = createdAt.split("-").map(Number);
+      return new Date(year, month - 1, day, now.getHours(), now.getMinutes(), now.getSeconds()).toISOString();
+    })();
 
     let result;
     if (editingPayment) {
