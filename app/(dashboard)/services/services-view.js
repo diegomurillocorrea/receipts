@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
 import {
   createServiceAction,
@@ -31,8 +31,17 @@ export function ServicesView({ initialServices, fetchError }) {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const isEditing = formOpen && formOpen !== "create";
+
+  const filteredServices = useMemo(() => {
+    if (!searchQuery.trim()) return services;
+    const q = searchQuery.trim().toLowerCase();
+    return services.filter((s) =>
+      (s.name ?? "").toLowerCase().includes(q)
+    );
+  }, [services, searchQuery]);
 
   const openCreate = useCallback(() => {
     setFormOpen("create");
@@ -137,6 +146,37 @@ export function ServicesView({ initialServices, fetchError }) {
         </div>
       )}
 
+      {services.length > 0 && (
+        <div className="relative">
+          <label htmlFor="service-search" className="sr-only">
+            Buscar por nombre del servicio
+          </label>
+          <input
+            id="service-search"
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Buscar por nombre del servicio..."
+            className="w-full rounded-xl border border-zinc-300 bg-white pl-10 pr-4 py-2.5 text-zinc-900 placeholder-zinc-400 transition-all duration-200 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-500 dark:focus:border-emerald-400 dark:focus:ring-emerald-500/30"
+            aria-label="Buscar servicios por nombre"
+          />
+          <svg
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 dark:text-zinc-500"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+        </div>
+      )}
+
       <div className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <div className="border-b border-zinc-200/80 bg-zinc-50/50 px-4 py-3.5 dark:border-zinc-800 dark:bg-zinc-800/30 tablet:px-6">
           <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
@@ -159,9 +199,23 @@ export function ServicesView({ initialServices, fetchError }) {
               Agregar servicio
             </button>
           </div>
+        ) : filteredServices.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-5 px-4 py-20 text-center">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              No se encontraron servicios con ese criterio de búsqueda.
+            </p>
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-300 bg-white px-5 text-sm font-medium text-zinc-700 transition-all hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              aria-label="Limpiar búsqueda"
+            >
+              Limpiar búsqueda
+            </button>
+          </div>
         ) : isMobile ? (
           <ul className="divide-y divide-zinc-200/80 px-4 py-2 dark:divide-zinc-800 tablet:px-6" role="list">
-            {services.map((service) => (
+            {filteredServices.map((service) => (
               <li
                 key={service.id}
                 className="flex flex-col gap-2 py-4 first:pt-4 last:pb-4"
@@ -212,7 +266,7 @@ export function ServicesView({ initialServices, fetchError }) {
                 </tr>
               </thead>
               <tbody>
-                {services.map((service) => (
+                {filteredServices.map((service) => (
                   <tr
                     key={service.id}
                     className="border-b border-zinc-100 last:border-0 transition-colors hover:bg-zinc-50/50 dark:border-zinc-800 dark:hover:bg-zinc-800/30"
