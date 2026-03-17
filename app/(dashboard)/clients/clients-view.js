@@ -62,7 +62,15 @@ export function ClientsView({ initialClients, fetchError }) {
       const name = (c.name ?? "").toLowerCase();
       const lastName = (c.last_name ?? "").toLowerCase();
       const phone = (c.phone_number ?? "").toString();
-      return name.includes(q) || lastName.includes(q) || phone.includes(q);
+      const fullName = `${name} ${lastName}`.trim();
+      const fullNameReversed = `${lastName} ${name}`.trim();
+      return (
+        name.includes(q) ||
+        lastName.includes(q) ||
+        fullName.includes(q) ||
+        fullNameReversed.includes(q) ||
+        phone.includes(q)
+      );
     });
   }, [clients, searchQuery]);
 
