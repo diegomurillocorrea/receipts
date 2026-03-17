@@ -214,7 +214,7 @@ export default function DashboardLayout({ children }) {
   const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
 
   return (
-    <div className="flex h-screen items-start overflow-hidden bg-zinc-50 dark:bg-zinc-950">
+    <div className="fixed inset-0 flex items-start overflow-hidden bg-zinc-50 dark:bg-zinc-950">
       {/* Mobile: top bar with menu button */}
       {isMobile && (
         <header
