@@ -445,6 +445,24 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
 
   const payments = getFilteredPayments();
 
+  const [historySearch, setHistorySearch] = useState("");
+
+  const filteredPayments = historySearch.trim()
+    ? payments.filter((payment) => {
+        const query = historySearch.trim().toLowerCase();
+        const receiptText = getPaymentReceiptDisplay(payment).toLowerCase();
+        const amountText = String(payment.total_amount ?? "").toLowerCase();
+        const amountFormatted = formatAmount(payment.total_amount).toLowerCase();
+        const dateText = formatDate(payment.created_at).toLowerCase();
+        return (
+          receiptText.includes(query) ||
+          amountText.includes(query) ||
+          amountFormatted.includes(query) ||
+          dateText.includes(query)
+        );
+      })
+    : payments;
+
   const getTotalAmount = useCallback(() => {
     return payments.reduce((sum, payment) => sum + (Number(payment.total_amount) || 0), 0);
   }, [payments]);
@@ -1008,20 +1026,57 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="border-b border-zinc-200/80 bg-zinc-50/50 px-4 py-3.5 dark:border-zinc-800 dark:bg-zinc-800/30 tablet:px-6">
-          <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-            Historial de pagos
-          </h2>
+        <div className="border-b border-zinc-200/80 bg-zinc-50/50 px-4 pb-3.5 pt-4 dark:border-zinc-800 dark:bg-zinc-800/30 tablet:px-6 tablet:pt-4">
+          <div className="flex flex-col gap-3 tablet:flex-row tablet:items-center tablet:justify-between">
+            <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+              Historial de pagos
+            </h2>
+            <div className="w-full">
+              <label
+                htmlFor="payments-history-search"
+                className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400"
+              >
+                Buscar en historial (cliente, monto, fecha)
+              </label>
+              <div className="relative">
+                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-zinc-400 dark:text-zinc-500">
+                  <svg
+                    className="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z"
+                    />
+                  </svg>
+                </span>
+                <input
+                  id="payments-history-search"
+                  type="search"
+                  value={historySearch}
+                  onChange={(event) => setHistorySearch(event.target.value)}
+                  placeholder="Ej. Juan, 25.00, 26 feb 2026…"
+                  className="w-full rounded-xl border border-zinc-300 bg-white py-2 pr-3 pl-9 text-xs text-zinc-900 placeholder-zinc-400 outline-none transition-all duration-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-500 dark:focus:border-emerald-400 dark:focus:ring-emerald-500/30"
+                  aria-label="Buscar pagos por cliente, monto o fecha"
+                />
+              </div>
+            </div>
+          </div>
         </div>
-        {payments.length === 0 ? (
+        {filteredPayments.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-4 px-4 py-20 text-center">
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              Aún no hay pagos registrados.
+              No hay pagos para mostrar con los filtros actuales.
             </p>
           </div>
         ) : isMobile ? (
           <ul className="divide-y divide-zinc-200/80 px-4 py-2 dark:divide-zinc-800 tablet:px-6" role="list">
-            {payments.map((payment) => {
+            {filteredPayments.map((payment) => {
               const whatsappUrl = buildWhatsAppVoucherUrl(payment);
               const hasPhone = !!getPaymentClientPhone(payment);
               return (
@@ -1158,7 +1213,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                 </tr>
               </thead>
               <tbody>
-                {payments.map((payment) => {
+                {filteredPayments.map((payment) => {
                   const whatsappUrl = buildWhatsAppVoucherUrl(payment);
                   const hasPhone = !!getPaymentClientPhone(payment);
                   return (
