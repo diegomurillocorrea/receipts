@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
 import {
   createPaymentMethodAction,
@@ -35,8 +35,17 @@ export function PaymentMethodsView({ initialPaymentMethods, fetchError }) {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const isEditing = formOpen && formOpen !== "create";
+
+  const filteredPaymentMethods = useMemo(() => {
+    if (!searchQuery.trim()) return paymentMethods;
+    const q = searchQuery.trim().toLowerCase();
+    return paymentMethods.filter((m) =>
+      (m.name ?? "").toLowerCase().includes(q)
+    );
+  }, [paymentMethods, searchQuery]);
 
   const openCreate = useCallback(() => {
     setFormOpen("create");
@@ -142,6 +151,37 @@ export function PaymentMethodsView({ initialPaymentMethods, fetchError }) {
         </div>
       )}
 
+      {paymentMethods.length > 0 && (
+        <div className="relative">
+          <label htmlFor="payment-method-search" className="sr-only">
+            Buscar por nombre del método de pago
+          </label>
+          <input
+            id="payment-method-search"
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Buscar por nombre del método de pago..."
+            className="w-full rounded-full border border-zinc-300 bg-white pl-10 pr-4 py-2.5 text-zinc-900 placeholder-zinc-400 transition-all duration-200 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-500/50 dark:bg-zinc-700 dark:text-zinc-100 dark:placeholder-zinc-400 dark:focus:border-emerald-400 dark:focus:ring-emerald-500/30"
+            aria-label="Buscar métodos de pago por nombre"
+          />
+          <svg
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 dark:text-zinc-500"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+        </div>
+      )}
+
       <div className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <div className="border-b border-zinc-200/80 bg-zinc-50/50 px-4 py-3.5 dark:border-zinc-800 dark:bg-zinc-800/30 tablet:px-6">
           <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
@@ -163,9 +203,23 @@ export function PaymentMethodsView({ initialPaymentMethods, fetchError }) {
               Agregar método
             </button>
           </div>
+        ) : filteredPaymentMethods.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-5 px-4 py-20 text-center">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              No se encontraron métodos de pago con ese criterio de búsqueda.
+            </p>
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="inline-flex h-11 items-center justify-center rounded-xl border border-zinc-300 bg-white px-5 text-sm font-medium text-zinc-700 transition-all hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+              aria-label="Limpiar búsqueda"
+            >
+              Limpiar búsqueda
+            </button>
+          </div>
         ) : isMobile ? (
           <ul className="divide-y divide-zinc-200/80 dark:divide-zinc-800" role="list">
-            {paymentMethods.map((method) => (
+            {filteredPaymentMethods.map((method) => (
               <li
                 key={method.id}
                 className="flex flex-col gap-2 px-4 py-4 first:pt-4 last:pb-4 tablet:px-6"
@@ -216,7 +270,7 @@ export function PaymentMethodsView({ initialPaymentMethods, fetchError }) {
                 </tr>
               </thead>
               <tbody>
-                {paymentMethods.map((method) => (
+                {filteredPaymentMethods.map((method) => (
                   <tr
                     key={method.id}
                     className="border-b border-zinc-100 last:border-0 transition-colors hover:bg-zinc-50/50 dark:border-zinc-800 dark:hover:bg-zinc-800/30"
