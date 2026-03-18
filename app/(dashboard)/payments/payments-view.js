@@ -468,6 +468,10 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
     return payments.reduce((sum, payment) => sum + (Number(payment.total_amount) || 0), 0);
   }, [payments]);
 
+  const getTotalCommission = useCallback(() => {
+    return payments.reduce((sum, payment) => sum + (Number(payment.commission) || 0), 0);
+  }, [payments]);
+
   const getFilterLabel = () => {
     switch (dateFilter) {
       case "daily":
@@ -731,10 +735,10 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                 Ganancia estimada
               </span>
               <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-500">
-                {formatAmount(payments.length)}
+                {formatAmount(getTotalCommission())}
               </span>
               <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                ${payments.length === 1 ? "1.00" : `${payments.length}.00`} en comisiones
+                {formatAmount(getTotalCommission())} en comisiones
               </span>
             </div>
           </div>
@@ -1094,6 +1098,9 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                       {formatAmount(payment.total_amount)}
                     </span>
                     <span className="text-xs text-zinc-600 dark:text-zinc-400">
+                      Comisión: {formatAmount(payment.commission)}
+                    </span>
+                    <span className="text-xs text-zinc-600 dark:text-zinc-400">
                       {getPaymentMethodName(payment)}
                     </span>
                     <span className="text-xs">
@@ -1217,6 +1224,9 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                     Monto
                   </th>
                   <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
+                    Comisión
+                  </th>
+                  <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
                     Método de pago
                   </th>
                   <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
@@ -1255,6 +1265,9 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                       </td>
                       <td className="px-4 py-3.5 text-center font-medium text-zinc-900 dark:text-zinc-50 tablet:px-6">
                         {formatAmount(payment.total_amount)}
+                      </td>
+                      <td className="px-4 py-3.5 text-center text-zinc-600 dark:text-zinc-400 tablet:px-6">
+                        {formatAmount(payment.commission)}
                       </td>
                       <td className="px-4 py-3.5 text-center text-zinc-600 dark:text-zinc-400 tablet:px-6">
                         {getPaymentMethodName(payment)}

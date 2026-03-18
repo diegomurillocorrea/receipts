@@ -8,6 +8,20 @@ const SEARCH_DEBOUNCE_MIN_LENGTH = 2;
 const SEARCH_RECEIPTS_LIMIT = 25;
 
 /**
+ * Commission by total_amount: $1 → $0.50; >$1 and <$50 → $1; >=$50 and <$100 → $2; >=$100 and <$150 → $3; etc.
+ * @param {number} totalAmount
+ * @returns {number}
+ */
+function computeCommission(totalAmount) {
+  const n = Number(totalAmount);
+  if (Number.isNaN(n) || n < 0) return 0;
+  if (n === 0) return 0;
+  if (n === 1) return 0.5;
+  if (n < 50) return 1;
+  return Math.floor(n / 50) + 1;
+}
+
+/**
  * Search receipts by client name, last name, service name, or account/receipt number.
  * @param {string} query
  * @returns {Promise<{ error: string | null; receipts?: { id: string; account_receipt_number: string; clients: { name: string; last_name: string } | null; services: { name: string } | null }[] }>}
@@ -83,6 +97,7 @@ export async function createPaymentAction(payload) {
     total_amount,
     payment_method_id,
     status,
+    commission: computeCommission(total_amount),
   };
   if (created_at) {
     insertPayload.created_at = created_at;
@@ -134,6 +149,7 @@ export async function updatePaymentAction(id, payload) {
     total_amount,
     payment_method_id,
     status,
+    commission: computeCommission(total_amount),
   };
   if (created_at) {
     updatePayload.created_at = created_at;
