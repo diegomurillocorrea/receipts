@@ -1,6 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { ServicesView } from "./services-view";
 
+export const metadata = {
+  title: "Servicios",
+};
+
 export default async function ServicesPage() {
   const supabase = await createClient();
   const { data: services = [], error } = await supabase

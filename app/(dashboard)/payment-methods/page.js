@@ -1,6 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { PaymentMethodsView } from "./payment-methods-view";
 
+export const metadata = {
+  title: "Métodos de pago",
+};
+
 export default async function PaymentMethodsPage() {
   const supabase = await createClient();
   const { data: paymentMethods = [], error: paymentMethodsError } = await supabase

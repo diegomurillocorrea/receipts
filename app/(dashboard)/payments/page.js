@@ -1,6 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { PaymentsView } from "./payments-view";
 
+export const metadata = {
+  title: "Pagos",
+};
+
 export default async function PaymentsPage() {
   const supabase = await createClient();
   const [paymentsResult, paymentMethodsResult] = await Promise.all([
