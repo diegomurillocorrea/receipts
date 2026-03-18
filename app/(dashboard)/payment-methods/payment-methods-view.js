@@ -265,7 +265,7 @@ export function PaymentMethodsView({ initialPaymentMethods, fetchError }) {
                     Creado
                   </th>
                   <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
-                    <span className="sr-only">Acciones</span>
+                    Acciones
                   </th>
                 </tr>
               </thead>
