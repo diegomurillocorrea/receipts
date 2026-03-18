@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Iniciar Sesión",
+  title: "DAIEGO Receipts",
 };
 
 export default function LoginLayout({ children }) {

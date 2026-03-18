@@ -75,7 +75,7 @@ function LoginForm() {
       <main className="w-full max-w-md rounded-2xl border border-zinc-200/80 bg-white p-8 shadow-lg dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-xl tablet:p-10">
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 tablet:text-3xl">
-            Gestor de Recibos
+            DAIEGO Receipts
           </h1>
           <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
             Inicia sesión en tu cuenta
@@ -183,7 +183,7 @@ function LoginFallback() {
       <main className="w-full max-w-md rounded-2xl border border-zinc-200/80 bg-white p-8 shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-            Gestor de Recibos
+            DAIEGO Receipts
           </h1>
           <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
             Cargando…
