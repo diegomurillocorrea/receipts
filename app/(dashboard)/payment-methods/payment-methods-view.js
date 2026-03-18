@@ -219,12 +219,15 @@ export function PaymentMethodsView({ initialPaymentMethods, fetchError }) {
           </div>
         ) : isMobile ? (
           <ul className="divide-y divide-zinc-200/80 dark:divide-zinc-800" role="list">
-            {filteredPaymentMethods.map((method) => (
+            {filteredPaymentMethods.map((method, index) => (
               <li
                 key={method.id}
                 className="flex flex-col gap-2 px-4 py-4 first:pt-4 last:pb-4 tablet:px-6"
               >
                 <div className="flex flex-col gap-0.5">
+                  <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400" aria-hidden>
+                    {index + 1}.
+                  </span>
                   <span className="font-semibold text-zinc-900 dark:text-zinc-50">
                     {method.name}
                   </span>
@@ -258,6 +261,9 @@ export function PaymentMethodsView({ initialPaymentMethods, fetchError }) {
             <table className="w-full text-left text-sm" role="grid">
               <thead>
                 <tr className="border-b border-zinc-200/80 dark:border-zinc-800">
+                  <th className="w-12 px-2 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-4" scope="col">
+                    #
+                  </th>
                   <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
                     Nombre
                   </th>
@@ -270,11 +276,14 @@ export function PaymentMethodsView({ initialPaymentMethods, fetchError }) {
                 </tr>
               </thead>
               <tbody>
-                {filteredPaymentMethods.map((method) => (
+                {filteredPaymentMethods.map((method, index) => (
                   <tr
                     key={method.id}
                     className="border-b border-zinc-100 last:border-0 transition-colors hover:bg-zinc-50/50 dark:border-zinc-800 dark:hover:bg-zinc-800/30"
                   >
+                    <td className="w-12 px-2 py-3.5 text-zinc-500 dark:text-zinc-400 tablet:px-4" aria-label={`Fila ${index + 1}`}>
+                      {index + 1}
+                    </td>
                     <td className="px-4 py-3.5 font-medium text-zinc-900 dark:text-zinc-50 tablet:px-6">
                       {method.name}
                     </td>
