@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Pencil, Trash2, Send, Eye, FileText } from "lucide-react";
+import { Pencil, Trash2, Send, Eye, FileText, Upload } from "lucide-react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -1007,10 +1007,14 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                 <button
                   type="button"
                   onClick={() => handleProofUploadOpen(editingPayment)}
-                  className="text-sm font-medium text-emerald-600 underline-offset-2 hover:underline dark:text-emerald-400"
+                  className="rounded p-1.5 text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
                   aria-label="Subir comprobante"
+                  title="Subir comprobante"
                 >
-                  Subir comprobante
+                  <span className="inline-flex items-center gap-1">
+                    <Upload className="h-4 w-4" aria-hidden />
+                    <FileText className="h-4 w-4" aria-hidden />
+                  </span>
                 </button>
               )
             )}
@@ -1196,11 +1200,14 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                         <button
                           type="button"
                           onClick={() => handleProofUploadOpen(payment)}
-                          className="text-sm font-medium text-zinc-700 underline-offset-2 hover:underline dark:text-zinc-300"
+                          className="rounded p-1.5 text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
                           aria-label="Subir comprobante de pago"
                           title="Subir comprobante de pago"
                         >
-                          Subir comprobante
+                          <span className="inline-flex items-center gap-1">
+                            <Upload className="h-4 w-4" aria-hidden />
+                            <FileText className="h-4 w-4" aria-hidden />
+                          </span>
                         </button>
                       )
                     )}
@@ -1366,11 +1373,14 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                               <button
                                 type="button"
                                 onClick={() => handleProofUploadOpen(payment)}
-                                className="font-medium text-zinc-700 underline-offset-2 hover:underline dark:text-zinc-300"
+                                className="rounded p-1.5 text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
                                 aria-label="Subir comprobante de pago"
                                 title="Subir comprobante de pago"
                               >
-                                Subir comprobante
+                                <span className="inline-flex items-center gap-1">
+                                  <Upload className="h-4 w-4" aria-hidden />
+                                  <FileText className="h-4 w-4" aria-hidden />
+                                </span>
                               </button>
                             )
                           )}
