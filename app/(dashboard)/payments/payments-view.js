@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useCallback, useEffect, useRef } from "react";
+import { Pencil, Trash2, Send, Eye, FileText } from "lucide-react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -1113,35 +1114,39 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                         <button
                           type="button"
                           onClick={() => handleEditPayment(payment)}
-                          className="text-sm font-medium text-emerald-600 underline-offset-2 hover:underline dark:text-emerald-400"
+                          className="rounded p-1.5 text-emerald-600 hover:bg-emerald-100 dark:text-emerald-400 dark:hover:bg-emerald-900/40"
                           aria-label={`Editar pago de ${getPaymentReceiptDisplay(payment)}`}
+                          title={`Editar pago de ${getPaymentReceiptDisplay(payment)}`}
                         >
-                          Editar
+                          <Pencil className="h-4 w-4" aria-hidden />
                         </button>
                         <button
                           type="button"
                           onClick={() => handleDeleteClick(payment)}
-                          className="text-sm font-medium text-red-600 underline-offset-2 hover:underline dark:text-red-400"
+                          className="rounded p-1.5 text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/40"
                           aria-label={`Eliminar pago de ${getPaymentReceiptDisplay(payment)}`}
+                          title={`Eliminar pago de ${getPaymentReceiptDisplay(payment)}`}
                         >
-                          Eliminar
+                          <Trash2 className="h-4 w-4" aria-hidden />
                         </button>
                         {whatsappUrl ? (
                           <a
                             href={whatsappUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-sm font-medium text-cyan-500 hover:underline dark:text-cyan-400"
+                            className="rounded p-1.5 text-cyan-500 hover:bg-cyan-100 dark:text-cyan-400 dark:hover:bg-cyan-900/40"
                             aria-label={`Enviar comprobante por WhatsApp a ${getPaymentReceiptDisplay(payment)}`}
+                            title={`Enviar comprobante por WhatsApp a ${getPaymentReceiptDisplay(payment)}`}
                           >
-                            Comprobante
+                            <Send className="h-4 w-4" aria-hidden />
                           </a>
                         ) : (
                           <span
-                            className="text-sm text-zinc-400 dark:text-zinc-500"
+                            className="inline-flex rounded p-1.5 text-zinc-400 dark:text-zinc-500"
                             title={hasPhone ? "Número de teléfono inválido" : "No hay número de teléfono para este cliente"}
+                            aria-hidden
                           >
-                            Comprobante
+                            <Send className="h-4 w-4" />
                           </span>
                         )}
                       </>
@@ -1151,20 +1156,28 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                         <button
                           type="button"
                           onClick={() => handleProofPreview(payment)}
-                          className="text-sm font-medium text-zinc-700 underline-offset-2 hover:underline dark:text-zinc-300"
+                          className="rounded p-1.5 text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
                           aria-label="Ver comprobante de pago"
+                          title="Ver comprobante de pago"
                         >
-                          Ver comprobante
+                          <span className="inline-flex items-center gap-1">
+                            <Eye className="h-4 w-4" aria-hidden />
+                            <FileText className="h-4 w-4" aria-hidden />
+                          </span>
                         </button>
                         {canSeeProofActions && (
                           <button
                             type="button"
                             onClick={() => handleProofRemove(payment)}
                             disabled={proofRemovingId === payment.id}
-                            className="text-sm font-medium text-red-600 underline-offset-2 hover:underline disabled:opacity-50 dark:text-red-400"
+                            className="rounded p-1.5 text-red-600 hover:bg-red-100 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/40"
                             aria-label="Quitar comprobante de pago"
+                            title="Quitar comprobante de pago"
                           >
-                            {proofRemovingId === payment.id ? "Quitando…" : "Quitar comprobante"}
+                            <span className="inline-flex items-center gap-1">
+                              <FileText className="h-4 w-4" aria-hidden />
+                              <Trash2 className="h-4 w-4" aria-hidden />
+                            </span>
                           </button>
                         )}
                       </>
@@ -1175,6 +1188,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                           onClick={() => handleProofUploadOpen(payment)}
                           className="text-sm font-medium text-zinc-700 underline-offset-2 hover:underline dark:text-zinc-300"
                           aria-label="Subir comprobante de pago"
+                          title="Subir comprobante de pago"
                         >
                           Subir comprobante
                         </button>
@@ -1187,10 +1201,10 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
           </ul>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm" role="grid">
+            <table className="w-full text-center text-sm" role="grid">
               <thead>
                 <tr className="border-b border-zinc-200/80 dark:border-zinc-800">
-                  <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
+                  <th className="max-w-[300px] px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
                     Recibo (cliente · servicio · cuenta)
                   </th>
                   <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
@@ -1206,7 +1220,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                     Fecha
                   </th>
                   <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
-                    <span className="sr-only">Acciones</span>
+                    <span className="">Acciones</span>
                   </th>
                 </tr>
               </thead>
@@ -1219,16 +1233,24 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                       key={payment.id}
                       className="border-b border-zinc-100 last:border-0 transition-colors hover:bg-zinc-50/50 dark:border-zinc-800 dark:hover:bg-zinc-800/30"
                     >
-                      <td className="px-4 py-3.5 text-zinc-900 dark:text-zinc-50 tablet:px-6">
-                        {getPaymentReceiptDisplay(payment)}
+                      <td className="max-w-[300px] min-w-0 px-4 py-3.5 text-center text-zinc-900 dark:text-zinc-50 tablet:px-6">
+                        <div
+                          className="max-w-full overflow-x-auto overflow-y-hidden text-left"
+                          style={{ scrollbarGutter: "stable" }}
+                          title={getPaymentReceiptDisplay(payment)}
+                        >
+                          <span className="inline-block whitespace-nowrap">
+                            {getPaymentReceiptDisplay(payment)}
+                          </span>
+                        </div>
                       </td>
-                      <td className="px-4 py-3.5 font-medium text-zinc-900 dark:text-zinc-50 tablet:px-6">
+                      <td className="px-4 py-3.5 text-center font-medium text-zinc-900 dark:text-zinc-50 tablet:px-6">
                         {formatAmount(payment.total_amount)}
                       </td>
-                      <td className="px-4 py-3.5 text-zinc-600 dark:text-zinc-400 tablet:px-6">
+                      <td className="px-4 py-3.5 text-center text-zinc-600 dark:text-zinc-400 tablet:px-6">
                         {getPaymentMethodName(payment)}
                       </td>
-                      <td className="px-4 py-3.5 tablet:px-6">
+                      <td className="px-4 py-3.5 text-center tablet:px-6">
                         <span
                           className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
                             payment.status === PAYMENT_STATUS_PAID
@@ -1240,45 +1262,49 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                           {getStatusLabel(payment.status)}
                         </span>
                       </td>
-                      <td className="px-4 py-3.5 text-zinc-500 dark:text-zinc-500 tablet:px-6">
+                      <td className="px-4 py-3.5 text-center text-zinc-500 dark:text-zinc-500 tablet:px-6">
                         {formatDate(payment.created_at)}
                       </td>
-                      <td className="px-4 py-3.5 tablet:px-6">
-                        <div className="flex flex-wrap items-center gap-3">
+                      <td className="px-4 py-3.5 text-center tablet:px-6">
+                        <div className="flex flex-wrap items-center justify-center gap-3">
                           {isAdmin && (
                             <>
                               <button
                                 type="button"
                                 onClick={() => handleEditPayment(payment)}
-                                className="font-medium text-emerald-600 underline-offset-2 hover:underline dark:text-emerald-400"
+                                className="rounded p-1.5 text-emerald-600 hover:bg-emerald-100 dark:text-emerald-400 dark:hover:bg-emerald-900/40"
                                 aria-label={`Editar pago de ${getPaymentReceiptDisplay(payment)}`}
+                                title={`Editar pago de ${getPaymentReceiptDisplay(payment)}`}
                               >
-                                Editar
+                                <Pencil className="h-4 w-4" aria-hidden />
                               </button>
                               <button
                                 type="button"
                                 onClick={() => handleDeleteClick(payment)}
-                                className="font-medium text-red-600 underline-offset-2 hover:underline dark:text-red-400"
+                                className="rounded p-1.5 text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/40"
                                 aria-label={`Eliminar pago de ${getPaymentReceiptDisplay(payment)}`}
+                                title={`Eliminar pago de ${getPaymentReceiptDisplay(payment)}`}
                               >
-                                Eliminar
+                                <Trash2 className="h-4 w-4" aria-hidden />
                               </button>
                               {whatsappUrl ? (
                                 <a
                                   href={whatsappUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="font-medium text-cyan-500 hover:underline dark:text-cyan-400"
+                                  className="rounded p-1.5 text-cyan-500 hover:bg-cyan-100 dark:text-cyan-400 dark:hover:bg-cyan-900/40"
                                   aria-label={`Enviar comprobante por WhatsApp a ${getPaymentReceiptDisplay(payment)}`}
+                                  title={`Enviar comprobante por WhatsApp a ${getPaymentReceiptDisplay(payment)}`}
                                 >
-                                  Comprobante
+                                  <Send className="h-4 w-4" aria-hidden />
                                 </a>
                               ) : (
                                 <span
-                                  className="text-zinc-400 dark:text-zinc-500"
+                                  className="inline-flex rounded p-1.5 text-zinc-400 dark:text-zinc-500"
                                   title={hasPhone ? "Número de teléfono inválido" : "No hay número de teléfono para este cliente"}
+                                  aria-hidden
                                 >
-                                  Comprobante
+                                  <Send className="h-4 w-4" />
                                 </span>
                               )}
                             </>
@@ -1288,20 +1314,28 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                               <button
                                 type="button"
                                 onClick={() => handleProofPreview(payment)}
-                                className="font-medium text-zinc-700 underline-offset-2 hover:underline dark:text-zinc-300"
+                                className="rounded p-1.5 text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
                                 aria-label="Ver comprobante de pago"
+                                title="Ver comprobante de pago"
                               >
-                                Ver comprobante
+                                <span className="inline-flex items-center gap-1">
+                                  <Eye className="h-4 w-4" aria-hidden />
+                                  <FileText className="h-4 w-4" aria-hidden />
+                                </span>
                               </button>
                               {canSeeProofActions && (
                                 <button
                                   type="button"
                                   onClick={() => handleProofRemove(payment)}
                                   disabled={proofRemovingId === payment.id}
-                                  className="font-medium text-red-600 underline-offset-2 hover:underline disabled:opacity-50 dark:text-red-400"
+                                  className="rounded p-1.5 text-red-600 hover:bg-red-100 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/40"
                                   aria-label="Quitar comprobante de pago"
+                                  title="Quitar comprobante de pago"
                                 >
-                                  {proofRemovingId === payment.id ? "Quitando…" : "Quitar comprobante"}
+                                  <span className="inline-flex items-center gap-1">
+                                    <FileText className="h-4 w-4" aria-hidden />
+                                    <Trash2 className="h-4 w-4" aria-hidden />
+                                  </span>
                                 </button>
                               )}
                             </>
@@ -1312,6 +1346,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                                 onClick={() => handleProofUploadOpen(payment)}
                                 className="font-medium text-zinc-700 underline-offset-2 hover:underline dark:text-zinc-300"
                                 aria-label="Subir comprobante de pago"
+                                title="Subir comprobante de pago"
                               >
                                 Subir comprobante
                               </button>
