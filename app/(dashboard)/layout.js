@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
+import { useTheme } from "@/hooks/use-theme";
 
 function useUser() {
   const [user, setUser] = useState(null);
@@ -93,41 +94,6 @@ function NavContent({ pathname, onNavClick, hideLogo, hideThemeToggle }) {
       </div>
     </>
   );
-}
-
-function useTheme() {
-  const [theme, setTheme] = useState("light");
-
-  useEffect(() => {
-    const savedTheme = localStorage.getItem("theme");
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const initialTheme = savedTheme || (prefersDark ? "dark" : "light");
-    setTheme(initialTheme);
-    
-    if (initialTheme === "dark") {
-      document.documentElement.classList.add("dark");
-      document.documentElement.classList.remove("light");
-    } else {
-      document.documentElement.classList.add("light");
-      document.documentElement.classList.remove("dark");
-    }
-  }, []);
-
-  const toggleTheme = useCallback(() => {
-    const newTheme = theme === "light" ? "dark" : "light";
-    setTheme(newTheme);
-    localStorage.setItem("theme", newTheme);
-    
-    if (newTheme === "dark") {
-      document.documentElement.classList.add("dark");
-      document.documentElement.classList.remove("light");
-    } else {
-      document.documentElement.classList.add("light");
-      document.documentElement.classList.remove("dark");
-    }
-  }, [theme]);
-
-  return { theme, toggleTheme };
 }
 
 function MobileThemeToggle() {
