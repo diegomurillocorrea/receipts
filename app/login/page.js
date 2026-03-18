@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useTheme } from "@/hooks/use-theme";
+import { Footer } from "@/components/footer";
 
 function LoginForm() {
   const router = useRouter();
@@ -54,7 +55,8 @@ function LoginForm() {
   const { theme, toggleTheme } = useTheme();
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center bg-zinc-100 px-4 py-8 dark:bg-zinc-950">
+    <div className="relative flex min-h-screen flex-col bg-zinc-100 dark:bg-zinc-950">
+      <div className="flex flex-1 flex-col items-center justify-center px-4 py-8">
       <button
         type="button"
         onClick={toggleTheme}
@@ -173,23 +175,28 @@ function LoginForm() {
           </button>
         </form>
       </main>
+      </div>
+      <Footer />
     </div>
   );
 }
 
 function LoginFallback() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-zinc-100 px-4 dark:bg-zinc-950">
-      <main className="w-full max-w-md rounded-2xl border border-zinc-200/80 bg-white p-8 shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-            DAIEGO Receipts
-          </h1>
-          <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-            Cargando…
-          </p>
-        </div>
-      </main>
+    <div className="flex min-h-screen flex-col bg-zinc-100 dark:bg-zinc-950">
+      <div className="flex flex-1 flex-col items-center justify-center px-4">
+        <main className="w-full max-w-md rounded-2xl border border-zinc-200/80 bg-white p-8 shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="mb-8 text-center">
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+              DAIEGO Receipts
+            </h1>
+            <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+              Cargando…
+            </p>
+          </div>
+        </main>
+      </div>
+      <Footer />
     </div>
   );
 }

@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 
 export const metadata = {
   title: {
-    default: "Gestor de Recibos",
-    template: "Gestor de Recibos | %s",
+    default: "DAIEGO Receipts",
+    template: "DAIEGO Receipts | %s",
   },
   description: "Aplicación de administración para gestionar recibos de agua, electricidad e internet.",
 };

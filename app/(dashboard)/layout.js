@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
 import { useTheme } from "@/hooks/use-theme";
+import { Footer } from "@/components/footer";
 
 function useUser() {
   const [user, setUser] = useState(null);
@@ -59,7 +60,7 @@ function NavContent({ pathname, onNavClick, hideLogo, hideThemeToggle }) {
             onClick={onNavClick}
             className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50"
           >
-            Gestor de Recibos
+            DAIEGO Receipts
           </Link>
         </div>
       )}
@@ -180,7 +181,7 @@ export default function DashboardLayout({ children }) {
   const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
 
   return (
-    <div className="fixed inset-0 flex items-start overflow-hidden bg-zinc-50 dark:bg-zinc-950">
+    <div className="fixed inset-0 flex overflow-hidden bg-zinc-50 dark:bg-zinc-950">
       {/* Mobile: top bar with menu button */}
       {isMobile && (
         <header
@@ -215,7 +216,7 @@ export default function DashboardLayout({ children }) {
               onClick={closeMobileMenu}
               className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50"
             >
-              Gestor de Recibos
+              DAIEGO Receipts
             </Link>
           </div>
           <MobileThemeToggle />
@@ -279,12 +280,15 @@ export default function DashboardLayout({ children }) {
         />
       </aside>
 
-      {/* Main content: only this area scrolls; sidebar stays fixed */}
-      <main className="min-h-0 max-h-screen flex-1 flex-col overflow-y-auto tablet:min-w-0">
+      {/* Main content: only this area scrolls; sidebar stays fixed. Flex column so footer sticks to bottom when content is short, or appears after content when long. */}
+      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto tablet:min-w-0">
         <div
-          className={`w-full p-4 tablet:p-6 desktop:p-8 ${isMobile ? "pt-20" : ""} ${isTablet ? "pt-10" : ""}`}
+          className={`flex-1 w-full p-4 tablet:p-6 desktop:p-8 ${isMobile ? "pt-20" : ""} ${isTablet ? "pt-10" : ""}`}
         >
           {children}
+        </div>
+        <div className="shrink-0">
+          <Footer />
         </div>
       </main>
     </div>
