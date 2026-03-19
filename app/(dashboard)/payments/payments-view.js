@@ -102,6 +102,19 @@ function getPaymentMethodName(payment) {
 }
 
 /**
+ * Commission/costo por servicio calculado según regla del backend.
+ * Comisión por total_amount: $1 -> $0.50; >$1 y <$50 -> $1; >=$50 y <$100 -> $2; etc.
+ */
+function computeServiceFee(totalAmount) {
+  const n = Number(totalAmount);
+  if (Number.isNaN(n) || n < 0) return 0;
+  if (n === 0) return 0;
+  if (n === 1) return 0.5;
+  if (n < 50) return 1;
+  return Math.floor(n / 50) + 1;
+}
+
+/**
  * Normalize phone for wa.me: digits only; if 8 digits assume El Salvador (+503).
  */
 function normalizePhoneForWhatsApp(phone) {
@@ -133,7 +146,11 @@ function buildWhatsAppVoucherUrl(payment) {
   const serviceName = service?.name ?? "—";
   const account = receipt?.account_receipt_number ?? "";
   const invoiceAmount = Number(payment.total_amount) || 0;
-  const serviceFee = 1;
+  // Comisión/costo por servicio calculado al guardar el pago en DB.
+  const commissionValue = payment.commission;
+  let serviceFee =
+    commissionValue == null ? computeServiceFee(invoiceAmount) : Number(commissionValue);
+  if (Number.isNaN(serviceFee)) serviceFee = computeServiceFee(invoiceAmount);
   const total = invoiceAmount + serviceFee;
   const date = formatDate(payment.created_at);
 
