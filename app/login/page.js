@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useTheme } from "@/hooks/use-theme";
 import { Footer } from "@/components/footer";
+import { DaiegoLogo } from "@/components/daiego-logo";
 
 function LoginForm() {
   const router = useRouter();
@@ -76,10 +77,22 @@ function LoginForm() {
       </button>
       <main className="w-full max-w-md rounded-2xl border border-zinc-200/80 bg-white p-8 shadow-lg dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-xl tablet:p-10">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 tablet:text-3xl">
-            DAIEGO Receipts
-          </h1>
-          <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+          <div
+            className="mb-2 flex items-center justify-center gap-3"
+            role="group"
+            aria-label="DAIEGO Receipts"
+          >
+            <DaiegoLogo
+              width={56}
+              height={56}
+              priority
+              className="h-12 w-12 shrink-0 object-contain"
+            />
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 tablet:text-3xl">
+              Receipts
+            </h1>
+          </div>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
             Inicia sesión en tu cuenta
           </p>
         </div>
@@ -187,12 +200,17 @@ function LoginFallback() {
       <div className="flex flex-1 flex-col items-center justify-center px-4">
         <main className="w-full max-w-md rounded-2xl border border-zinc-200/80 bg-white p-8 shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
           <div className="mb-8 text-center">
-            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-              DAIEGO Receipts
-            </h1>
-            <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-              Cargando…
-            </p>
+            <div
+              className="mb-2 flex items-center justify-center gap-3"
+              role="group"
+              aria-label="DAIEGO Receipts"
+            >
+              <DaiegoLogo width={56} height={56} className="h-12 w-12 shrink-0 object-contain" />
+              <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+                Receipts
+              </h1>
+            </div>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">Cargando…</p>
           </div>
         </main>
       </div>

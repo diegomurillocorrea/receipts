@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
 import { useTheme } from "@/hooks/use-theme";
 import { Footer } from "@/components/footer";
+import { DaiegoLogo } from "@/components/daiego-logo";
 
 function useUser() {
   const [user, setUser] = useState(null);
@@ -58,9 +59,15 @@ function NavContent({ pathname, onNavClick, hideLogo, hideThemeToggle }) {
           <Link
             href="/payments"
             onClick={onNavClick}
-            className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50"
+            className="flex min-w-0 items-center gap-3 rounded-lg text-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 dark:text-zinc-50 dark:focus:ring-offset-zinc-900"
+            aria-label="Ir a inicio — DAIEGO Receipts"
           >
-            DAIEGO Receipts
+            <DaiegoLogo
+              width={56}
+              height={56}
+              className="h-12 w-12 shrink-0 object-contain"
+            />
+            <span className="truncate text-xl font-bold tracking-tight">Receipts</span>
           </Link>
         </div>
       )}
@@ -214,9 +221,15 @@ export default function DashboardLayout({ children }) {
             <Link
               href="/payments"
               onClick={closeMobileMenu}
-              className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50"
+              className="flex min-w-0 items-center gap-2 rounded-lg text-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 dark:text-zinc-50 dark:focus:ring-offset-zinc-900"
+              aria-label="Ir a inicio — DAIEGO Receipts"
             >
-              DAIEGO Receipts
+              <DaiegoLogo
+                width={40}
+                height={40}
+                className="h-9 w-9 shrink-0 object-contain"
+              />
+              <span className="truncate text-lg font-bold tracking-tight">Receipts</span>
             </Link>
           </div>
           <MobileThemeToggle />
