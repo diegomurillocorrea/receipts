@@ -137,12 +137,13 @@ function paymentMatchesHistoryQuery(rawQuery, fieldParts) {
 
 /**
  * Commission/costo por servicio calculado según regla del backend.
- * Comisión por total_amount: $1 -> $0.50; >$1 y <$50 -> $1; >=$50 y <$100 -> $2; etc.
+ * Comisión por total_amount: $0.50 -> $0.25; $1 -> $0.50; >$1 y <$50 -> $1; >=$50 y <$100 -> $2; etc.
  */
 function computeServiceFee(totalAmount) {
   const n = Number(totalAmount);
   if (Number.isNaN(n) || n < 0) return 0;
   if (n === 0) return 0;
+  if (n === 0.5) return 0.25;
   if (n === 1) return 0.5;
   if (n < 50) return 1;
   return Math.floor(n / 50) + 1;

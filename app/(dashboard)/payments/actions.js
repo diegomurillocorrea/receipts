@@ -57,7 +57,7 @@ const SEARCH_DEBOUNCE_MIN_LENGTH = 2;
 const SEARCH_RECEIPTS_LIMIT = 25;
 
 /**
- * Commission by total_amount: $1 → $0.50; >$1 and <$50 → $1; >=$50 and <$100 → $2; >=$100 and <$150 → $3; etc.
+ * Commission by total_amount: $0.50 → $0.25; $1 → $0.50; >$1 and <$50 → $1; >=$50 and <$100 → $2; etc.
  * @param {number} totalAmount
  * @returns {number}
  */
@@ -65,6 +65,7 @@ function computeCommission(totalAmount) {
   const n = Number(totalAmount);
   if (Number.isNaN(n) || n < 0) return 0;
   if (n === 0) return 0;
+  if (n === 0.5) return 0.25;
   if (n === 1) return 0.5;
   if (n < 50) return 1;
   return Math.floor(n / 50) + 1;
