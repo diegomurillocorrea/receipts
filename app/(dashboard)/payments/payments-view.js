@@ -73,16 +73,39 @@ function formatAmount(value) {
   }).format(n);
 }
 
+/** Supabase puede devolver el join `receipts` como objeto o como array de una fila */
+function normalizeReceiptRef(receipt) {
+  if (!receipt) return null;
+  if (Array.isArray(receipt)) return receipt[0] ?? null;
+  return receipt;
+}
+
+function getServiceNamesSearchText(receipt) {
+  const r = normalizeReceiptRef(receipt);
+  if (!r) return "";
+  const service = r.services ?? r.service;
+  if (Array.isArray(service)) {
+    return service
+      .map((s) => (s?.name ?? "").trim())
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+  }
+  return (service?.name ?? "").trim().toLowerCase();
+}
+
 function getReceiptLabel(receipt) {
-  if (!receipt) return "";
-  const client = receipt.clients ?? receipt.client;
-  const service = receipt.services ?? receipt.service;
+  const r = normalizeReceiptRef(receipt);
+  if (!r) return "";
+  const client = r.clients ?? r.client;
+  const service = r.services ?? r.service;
+  const svc = Array.isArray(service) ? service[0] : service;
   const clientName =
     client && (client.name || client.last_name)
       ? [client.name, client.last_name].filter(Boolean).join(" ")
       : "—";
-  const serviceName = service?.name ?? "—";
-  const account = receipt.account_receipt_number ?? "";
+  const serviceName = svc?.name ?? "—";
+  const account = r.account_receipt_number ?? "";
   return `${clientName} · ${serviceName}${account ? ` (${account})` : ""}`;
 }
 
@@ -94,6 +117,22 @@ function getPaymentReceiptDisplay(payment) {
 function getPaymentMethodName(payment) {
   const method = payment.payment_methods;
   return method?.name ?? "—";
+}
+
+/**
+ * Varias palabras: cada término debe aparecer en algún campo (p. ej. "miguel free" coincide con
+ * cliente + servicio aunque no exista la frase exacta "miguel free" seguida).
+ */
+function paymentMatchesHistoryQuery(rawQuery, fieldParts) {
+  const q = rawQuery.trim().toLowerCase();
+  if (!q) return true;
+  const tokens = q.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return true;
+  const haystack = fieldParts
+    .filter((s) => s != null && String(s).trim() !== "")
+    .map((s) => String(s).toLowerCase())
+    .join(" ");
+  return tokens.every((token) => haystack.includes(token));
 }
 
 /**
@@ -438,27 +477,32 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
 
   const filteredPayments = historySearch.trim()
     ? payments.filter((payment) => {
-        const query = historySearch.trim().toLowerCase();
-        const receiptText = getPaymentReceiptDisplay(payment).toLowerCase();
-        const amountText = String(payment.total_amount ?? "").toLowerCase();
-        const amountFormatted = formatAmount(payment.total_amount).toLowerCase();
-        const dateText = formatDate(payment.created_at).toLowerCase();
-        return (
-          receiptText.includes(query) ||
-          amountText.includes(query) ||
-          amountFormatted.includes(query) ||
-          dateText.includes(query)
+        const receiptText = getPaymentReceiptDisplay(payment);
+        const serviceText = getServiceNamesSearchText(
+          payment.receipt ?? payment.receipts
         );
+        const amountText = String(payment.total_amount ?? "");
+        const amountFormatted = formatAmount(payment.total_amount);
+        const dateText = formatDate(payment.created_at);
+        const methodText = getPaymentMethodName(payment);
+        return paymentMatchesHistoryQuery(historySearch.trim(), [
+          receiptText,
+          serviceText,
+          amountText,
+          amountFormatted,
+          dateText,
+          methodText,
+        ]);
       })
     : payments;
 
   const getTotalAmount = useCallback(() => {
-    return payments.reduce((sum, payment) => sum + (Number(payment.total_amount) || 0), 0);
-  }, [payments]);
+    return filteredPayments.reduce((sum, payment) => sum + (Number(payment.total_amount) || 0), 0);
+  }, [filteredPayments]);
 
   const getTotalCommission = useCallback(() => {
-    return payments.reduce((sum, payment) => sum + (Number(payment.commission) || 0), 0);
-  }, [payments]);
+    return filteredPayments.reduce((sum, payment) => sum + (Number(payment.commission) || 0), 0);
+  }, [filteredPayments]);
 
   const getFilterLabel = () => {
     switch (dateFilter) {
@@ -720,7 +764,8 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                 {formatAmount(getTotalAmount())}
               </span>
               <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                {payments.length} {payments.length === 1 ? "pago" : "pagos"}
+                {filteredPayments.length}{" "}
+                {filteredPayments.length === 1 ? "pago" : "pagos"}
               </span>
             </div>
           </div>
@@ -1066,7 +1111,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                 htmlFor="payments-history-search"
                 className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400"
               >
-                Buscar en historial (cliente, monto, fecha)
+                Buscar en historial (cliente, servicio, monto, fecha)
               </label>
               <div className="relative">
                 <svg
@@ -1088,9 +1133,9 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                   type="search"
                   value={historySearch}
                   onChange={(event) => setHistorySearch(event.target.value)}
-                  placeholder="Ej. Juan, 25.00, 26 feb 2026…"
+                  placeholder="Ej. Juan, Roblox, 25.00, 26 feb 2026…"
                   className="w-full rounded-full border border-zinc-300 bg-white py-2.5 pr-4 pl-10 text-sm text-zinc-900 placeholder-zinc-400 outline-none transition-all duration-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-500/50 dark:bg-zinc-700 dark:text-zinc-100 dark:placeholder-zinc-400 dark:focus:border-emerald-400 dark:focus:ring-emerald-500/30"
-                  aria-label="Buscar pagos por cliente, monto o fecha"
+                  aria-label="Buscar pagos por cliente, servicio, monto o fecha"
                 />
               </div>
             </div>
