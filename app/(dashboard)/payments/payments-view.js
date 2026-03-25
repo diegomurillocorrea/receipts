@@ -13,6 +13,7 @@ import {
   uploadPaymentProofAction,
   removePaymentProofAction,
   getPaymentProofUrlAction,
+  generatePaymentVoucherPdfAction,
 } from "./actions";
 import {
   PAYMENT_STATUS_PENDING,
@@ -90,12 +91,6 @@ function getPaymentReceiptDisplay(payment) {
   return getReceiptLabel(receipt);
 }
 
-function getPaymentClientPhone(payment) {
-  const receipt = payment.receipt ?? payment.receipts;
-  const client = receipt?.clients ?? receipt?.client;
-  return client?.phone_number?.trim() ?? "";
-}
-
 function getPaymentMethodName(payment) {
   const method = payment.payment_methods;
   return method?.name ?? "—";
@@ -112,62 +107,6 @@ function computeServiceFee(totalAmount) {
   if (n === 1) return 0.5;
   if (n < 50) return 1;
   return Math.floor(n / 50) + 1;
-}
-
-/**
- * Normalize phone for wa.me: digits only; if 8 digits assume El Salvador (+503).
- */
-function normalizePhoneForWhatsApp(phone) {
-  const digits = (phone ?? "").replace(/\D/g, "");
-  if (digits.length === 0) return "";
-  if (digits.length === 8 && !digits.startsWith("0")) {
-    return "503" + digits;
-  }
-  if (digits.startsWith("503")) return digits;
-  if (digits.startsWith("0")) return "503" + digits.slice(1);
-  return digits;
-}
-
-/**
- * Build WhatsApp URL with the voucher as plain text.
- */
-function buildWhatsAppVoucherUrl(payment) {
-  const phone = getPaymentClientPhone(payment);
-  const normalized = normalizePhoneForWhatsApp(phone);
-  if (!normalized) return null;
-
-  const receipt = payment.receipt ?? payment.receipts;
-  const client = receipt?.clients ?? receipt?.client;
-  const service = receipt?.services ?? receipt?.service;
-  const clientName =
-    client && (client.name || client.last_name)
-      ? [client.name, client.last_name].filter(Boolean).join(" ")
-      : "Cliente";
-  const serviceName = service?.name ?? "—";
-  const account = receipt?.account_receipt_number ?? "";
-  const invoiceAmount = Number(payment.total_amount) || 0;
-  // Comisión/costo por servicio calculado al guardar el pago en DB.
-  const commissionValue = payment.commission;
-  let serviceFee =
-    commissionValue == null ? computeServiceFee(invoiceAmount) : Number(commissionValue);
-  if (Number.isNaN(serviceFee)) serviceFee = computeServiceFee(invoiceAmount);
-  const total = invoiceAmount + serviceFee;
-  const date = formatDate(payment.created_at);
-
-  const message = [
-    "———————————————",
-    "     Comprobante de pago",
-    "———————————————",
-    `Número de Comprobante: ${payment.id}`,
-    `Cliente: ${clientName}`,
-    `Servicio: ${serviceName}${account ? ` ${account}` : ""}`,
-    `Monto Factura: ${formatAmount(invoiceAmount)}`,
-    `Costo por Servicio: ${formatAmount(serviceFee)}`,
-    `Total: ${formatAmount(total)}`,
-    `Fecha: ${date}`,
-  ].join("\n");
-
-  return `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;
 }
 
 const SEARCH_DEBOUNCE_MS = 300;
@@ -199,6 +138,8 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
   const [proofPreviewLoading, setProofPreviewLoading] = useState(false);
   const [proofPreviewError, setProofPreviewError] = useState(null);
   const [proofUploadModalPayment, setProofUploadModalPayment] = useState(null);
+  const [voucherSendingId, setVoucherSendingId] = useState(null);
+  const [voucherNotice, setVoucherNotice] = useState(null);
   const proofFileInputRef = useRef(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingPayment, setEditingPayment] = useState(null);
@@ -429,6 +370,31 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
     }
     router.refresh();
   }, [editingPayment?.id]);
+
+  const handleSendVoucherWhatsApp = useCallback(
+    async (payment) => {
+      if (!payment?.id) return;
+      setVoucherSendingId(payment.id);
+      setVoucherNotice(null);
+      const result = await generatePaymentVoucherPdfAction(payment.id);
+      setVoucherSendingId(null);
+      if (result.error) {
+        setVoucherNotice({ variant: "error", message: result.error });
+        return;
+      }
+      router.refresh();
+      if (result.whatsappUrl) {
+        window.open(result.whatsappUrl, "_blank", "noopener,noreferrer");
+        return;
+      }
+      setVoucherNotice({
+        variant: "success",
+        message: "PDF del comprobante guardado. El cliente no tiene un telefono valido para WhatsApp.",
+        publicUrl: result.publicUrl,
+      });
+    },
+    [router]
+  );
 
   const getFilteredPayments = useCallback(() => {
     const [year, month, day] = selectedDate.split("-").map(Number);
@@ -1130,7 +1096,38 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
             </div>
           </div>
         </div>
-        {filteredPayments.length === 0 ? (
+        {voucherNotice && (
+          <div
+            role="alert"
+            className={`border-b px-4 py-3 text-sm tablet:px-6 ${
+              voucherNotice.variant === "error"
+                ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300"
+                : "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-200"
+            }`}
+          >
+            <p>{voucherNotice.message}</p>
+            {voucherNotice.publicUrl ? (
+              <a
+                href={voucherNotice.publicUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 inline-block font-medium underline underline-offset-2"
+              >
+                Abrir PDF del comprobante
+              </a>
+            ) : null}
+            <div className="mt-2">
+              <button
+                type="button"
+                onClick={() => setVoucherNotice(null)}
+                className="text-xs text-zinc-600 underline dark:text-zinc-400"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        )}
+                {filteredPayments.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-4 px-4 py-20 text-center">
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
               No hay pagos para mostrar con los filtros actuales.
@@ -1139,8 +1136,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
         ) : isMobile ? (
           <ul className="divide-y divide-zinc-200/80 px-4 py-2 dark:divide-zinc-800 tablet:px-6" role="list">
             {filteredPayments.map((payment, index) => {
-              const whatsappUrl = buildWhatsAppVoucherUrl(payment);
-              const hasPhone = !!getPaymentClientPhone(payment);
+              const isSendingVoucher = voucherSendingId === payment.id;
               return (
                 <li
                   key={payment.id}
@@ -1198,26 +1194,16 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                         >
                           <Trash2 className="h-4 w-4" aria-hidden />
                         </button>
-                        {whatsappUrl ? (
-                          <a
-                            href={whatsappUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="rounded p-1.5 text-cyan-500 hover:bg-cyan-100 dark:text-cyan-400 dark:hover:bg-cyan-900/40"
-                            aria-label={`Enviar comprobante por WhatsApp a ${getPaymentReceiptDisplay(payment)}`}
-                            title={`Enviar comprobante por WhatsApp a ${getPaymentReceiptDisplay(payment)}`}
-                          >
-                            <Send className="h-4 w-4" aria-hidden />
-                          </a>
-                        ) : (
-                          <span
-                            className="inline-flex rounded p-1.5 text-zinc-400 dark:text-zinc-500"
-                            title={hasPhone ? "Número de teléfono inválido" : "No hay número de teléfono para este cliente"}
-                            aria-hidden
-                          >
-                            <Send className="h-4 w-4" />
-                          </span>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleSendVoucherWhatsApp(payment)}
+                          disabled={isSendingVoucher}
+                          className="rounded p-1.5 text-cyan-500 hover:bg-cyan-100 disabled:opacity-50 dark:text-cyan-400 dark:hover:bg-cyan-900/40"
+                          aria-label={`Generar PDF y enviar comprobante por WhatsApp a ${getPaymentReceiptDisplay(payment)}`}
+                          title="Genera un PDF con logo y datos, lo guarda y abre WhatsApp con el enlace al archivo"
+                        >
+                          <Send className={`h-4 w-4 ${isSendingVoucher ? "animate-pulse" : ""}`} aria-hidden />
+                        </button>
                       </>
                     )}
                     {getProofPublicUrl(payment) ? (
@@ -1304,8 +1290,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
               </thead>
               <tbody>
                 {filteredPayments.map((payment, index) => {
-                  const whatsappUrl = buildWhatsAppVoucherUrl(payment);
-                  const hasPhone = !!getPaymentClientPhone(payment);
+                  const isSendingVoucher = voucherSendingId === payment.id;
                   return (
                     <tr
                       key={payment.id}
@@ -1371,26 +1356,16 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                               >
                                 <Trash2 className="h-4 w-4" aria-hidden />
                               </button>
-                              {whatsappUrl ? (
-                                <a
-                                  href={whatsappUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="rounded p-1.5 text-cyan-500 hover:bg-cyan-100 dark:text-cyan-400 dark:hover:bg-cyan-900/40"
-                                  aria-label={`Enviar comprobante por WhatsApp a ${getPaymentReceiptDisplay(payment)}`}
-                                  title={`Enviar comprobante por WhatsApp a ${getPaymentReceiptDisplay(payment)}`}
-                                >
-                                  <Send className="h-4 w-4" aria-hidden />
-                                </a>
-                              ) : (
-                                <span
-                                  className="inline-flex rounded p-1.5 text-zinc-400 dark:text-zinc-500"
-                                  title={hasPhone ? "Número de teléfono inválido" : "No hay número de teléfono para este cliente"}
-                                  aria-hidden
-                                >
-                                  <Send className="h-4 w-4" />
-                                </span>
-                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleSendVoucherWhatsApp(payment)}
+                                disabled={isSendingVoucher}
+                                className="rounded p-1.5 text-cyan-500 hover:bg-cyan-100 disabled:opacity-50 dark:text-cyan-400 dark:hover:bg-cyan-900/40"
+                                aria-label={`Generar PDF y enviar comprobante por WhatsApp a ${getPaymentReceiptDisplay(payment)}`}
+                                title="Genera un PDF con logo y datos, lo guarda y abre WhatsApp con el enlace al archivo"
+                              >
+                                <Send className={`h-4 w-4 ${isSendingVoucher ? "animate-pulse" : ""}`} aria-hidden />
+                              </button>
                             </>
                           )}
                           {getProofPublicUrl(payment) ? (

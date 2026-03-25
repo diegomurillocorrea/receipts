@@ -1,8 +1,57 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { buildPaymentVoucherPdfBytes } from "@/lib/payment-voucher-pdf";
 import { revalidatePath } from "next/cache";
-import { PAYMENT_PROOF_BUCKET, PAYMENT_STATUS_PAID, PAYMENT_STATUS_PENDING } from "./constants";
+import {
+  PAYMENT_PROOF_BUCKET,
+  PAYMENT_STATUS_PAID,
+  PAYMENT_STATUS_PENDING,
+  PAYMENT_VOUCHER_BUCKET,
+  PAYMENT_VOUCHER_PREFIX,
+  STATUS_LABELS,
+} from "./constants";
+
+const ALLOWED_ADMIN_EMAIL = "diegomurillocorrea@gmail.com";
+
+/**
+ * @param {unknown} value
+ * @returns {string}
+ */
+function sanitizeFilenamePart(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "—";
+  return raw
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+/**
+ * @param {Date} d
+ * @returns {string} e.g. 2026-03-25_14-07
+ */
+function formatTimestampForFilename(d) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
+}
+
+/**
+ * @param {string | undefined} phone
+ * @returns {string}
+ */
+function normalizePhoneForWhatsApp(phone) {
+  const digits = (phone ?? "").replace(/\D/g, "");
+  if (digits.length === 0) return "";
+  if (digits.length === 8 && !digits.startsWith("0")) {
+    return "503" + digits;
+  }
+  if (digits.startsWith("503")) return digits;
+  if (digits.startsWith("0")) return "503" + digits.slice(1);
+  return digits;
+}
 
 const SEARCH_DEBOUNCE_MIN_LENGTH = 2;
 const SEARCH_RECEIPTS_LIMIT = 25;
@@ -317,4 +366,113 @@ export async function getPaymentProofUrlAction(paymentId) {
     return { error: "No se pudo generar el enlace de la imagen." };
   }
   return { error: null, url: signed.signedUrl };
+}
+
+/**
+ * Genera un PDF del comprobante (logo + datos), lo sube a Storage y guarda la ruta en `payments`.
+ * Opcionalmente devuelve una URL de WhatsApp con el enlace al PDF.
+ * @param {string} paymentId
+ * @returns {Promise<{ error: string | null; publicUrl?: string; whatsappUrl?: string | null }>}
+ */
+export async function generatePaymentVoucherPdfAction(paymentId) {
+  if (!paymentId) {
+    return { error: "El ID del pago es requerido." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user?.email || user.email !== ALLOWED_ADMIN_EMAIL) {
+    return { error: "No autorizado." };
+  }
+
+  const generatedAt = new Date();
+
+  const { data: payment, error: fetchError } = await supabase
+    .from("payments")
+    .select(
+      "id, total_amount, commission, status, created_at, receipts(account_receipt_number, clients(name, last_name, phone_number), services(name)), payment_methods(name)"
+    )
+    .eq("id", paymentId)
+    .single();
+
+  if (fetchError || !payment) {
+    return { error: fetchError?.message ?? "Pago no encontrado." };
+  }
+
+  const receipt = Array.isArray(payment.receipts) ? payment.receipts[0] : payment.receipts;
+  const client = receipt?.clients;
+  const service = receipt?.services;
+  const clientName =
+    client && (client.name || client.last_name)
+      ? [client.name, client.last_name].filter(Boolean).join(" ")
+      : "Cliente";
+  const serviceName = service?.name ?? "—";
+  const account = receipt?.account_receipt_number ?? "";
+  const paymentMethodName = payment.payment_methods?.name ?? "—";
+  const statusLabel =
+    payment.status === PAYMENT_STATUS_PAID
+      ? STATUS_LABELS[PAYMENT_STATUS_PAID]
+      : STATUS_LABELS[PAYMENT_STATUS_PENDING];
+
+  const pdfBytes = await buildPaymentVoucherPdfBytes({
+    paymentId: payment.id,
+    createdAt: payment.created_at,
+    totalAmount: payment.total_amount,
+    commission: payment.commission,
+    statusLabel,
+    paymentMethodName,
+    clientName,
+    serviceName,
+    accountReceiptNumber: account,
+  });
+
+  const filename = `${sanitizeFilenamePart(clientName)} ${sanitizeFilenamePart(serviceName)} ${sanitizeFilenamePart(account)} ${formatTimestampForFilename(generatedAt)}.pdf`;
+  const storagePath = `${PAYMENT_VOUCHER_PREFIX}/${paymentId}/${filename}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from(PAYMENT_VOUCHER_BUCKET)
+    .upload(storagePath, pdfBytes, {
+      contentType: "application/pdf",
+      upsert: false,
+    });
+
+  if (uploadError) {
+    return { error: uploadError.message };
+  }
+
+  const { error: updateError } = await supabase
+    .from("payments")
+    .update({
+      voucher_pdf_bucket: PAYMENT_VOUCHER_BUCKET,
+      voucher_pdf_path: storagePath,
+    })
+    .eq("id", paymentId);
+
+  if (updateError) {
+    return { error: updateError.message };
+  }
+
+  const { data: urlData } = supabase.storage
+    .from(PAYMENT_VOUCHER_BUCKET)
+    .getPublicUrl(storagePath);
+
+  const publicUrl = urlData?.publicUrl;
+  if (!publicUrl) {
+    return { error: "No se pudo obtener la URL publica del PDF." };
+  }
+
+  const phone = client?.phone_number?.trim() ?? "";
+  const normalized = normalizePhoneForWhatsApp(phone);
+  const message = `Se adjunta comprobante de pago para ${clientName}: ${publicUrl}`;
+
+  const whatsappUrl = normalized
+    ? `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`
+    : null;
+
+  revalidatePath("/payments");
+  revalidatePath("/");
+
+  return { error: null, publicUrl, whatsappUrl };
 }

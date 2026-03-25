@@ -11,7 +11,7 @@ export default async function PaymentsPage() {
     supabase
       .from("payments")
       .select(
-        "id, receipt_id, payment_method_id, total_amount, commission, status, proof_bucket, proof_path, created_at, receipts(id, account_receipt_number, clients(name, last_name, phone_number), services(name)), payment_methods(name)"
+        "id, receipt_id, payment_method_id, total_amount, commission, status, proof_bucket, proof_path, voucher_pdf_bucket, voucher_pdf_path, created_at, receipts(id, account_receipt_number, clients(name, last_name, phone_number), services(name)), payment_methods(name)"
       )
       .order("created_at", { ascending: false }),
     supabase
