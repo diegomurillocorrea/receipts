@@ -276,7 +276,7 @@ export default function DashboardLayout({ children }) {
           pathname={pathname}
           onNavClick={isMobile ? closeMobileMenu : undefined}
           hideLogo={isMobile}
-          hideThemeToggle={isMobile || isTablet}
+          hideThemeToggle={isMobile}
         />
       </aside>
 
