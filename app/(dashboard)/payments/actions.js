@@ -69,7 +69,7 @@ export async function searchReceiptsForPaymentAction(query) {
 }
 
 /**
- * @param {{ receipt_id: string; total_amount: number; payment_method_id: string; status?: number; created_at?: string }} payload
+ * @param {{ receipt_id: string; total_amount: number; payment_method_id: string; status?: number; created_at?: string; add_commission?: boolean }} payload
  * @returns {Promise<{ error: string | null }>}
  */
 export async function createPaymentAction(payload) {
@@ -79,6 +79,7 @@ export async function createPaymentAction(payload) {
   const status =
     payload.status === PAYMENT_STATUS_PAID ? PAYMENT_STATUS_PAID : PAYMENT_STATUS_PENDING;
   const created_at = payload.created_at?.trim() || null;
+  const add_commission = payload.add_commission !== false;
 
   if (!receipt_id) {
     return { error: "El recibo es requerido." };
@@ -97,7 +98,7 @@ export async function createPaymentAction(payload) {
     total_amount,
     payment_method_id,
     status,
-    commission: computeCommission(total_amount),
+    commission: add_commission ? computeCommission(total_amount) : 0,
   };
   if (created_at) {
     insertPayload.created_at = created_at;
@@ -117,7 +118,7 @@ export async function createPaymentAction(payload) {
 
 /**
  * @param {string} id
- * @param {{ receipt_id: string; total_amount: number; payment_method_id: string; status?: number; created_at?: string }} payload
+ * @param {{ receipt_id: string; total_amount: number; payment_method_id: string; status?: number; created_at?: string; add_commission?: boolean }} payload
  * @returns {Promise<{ error: string | null }>}
  */
 export async function updatePaymentAction(id, payload) {
@@ -131,6 +132,7 @@ export async function updatePaymentAction(id, payload) {
   const status =
     payload.status === PAYMENT_STATUS_PAID ? PAYMENT_STATUS_PAID : PAYMENT_STATUS_PENDING;
   const created_at = payload.created_at?.trim() || null;
+  const add_commission = payload.add_commission !== false;
 
   if (!receipt_id) {
     return { error: "El recibo es requerido." };
@@ -149,7 +151,7 @@ export async function updatePaymentAction(id, payload) {
     total_amount,
     payment_method_id,
     status,
-    commission: computeCommission(total_amount),
+    commission: add_commission ? computeCommission(total_amount) : 0,
   };
   if (created_at) {
     updatePayload.created_at = created_at;

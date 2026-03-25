@@ -184,6 +184,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
   const [selectedReceipt, setSelectedReceipt] = useState(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("");
   const [selectedStatus, setSelectedStatus] = useState(PAYMENT_STATUS_PENDING);
+  const [includeCommission, setIncludeCommission] = useState(true);
   const [amount, setAmount] = useState("");
   const [createdAt, setCreatedAt] = useState(() => {
     const d = new Date();
@@ -302,6 +303,9 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
       const d = new Date();
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
     })());
+    const expectedFee = computeServiceFee(Number(payment.total_amount));
+    const storedCommission = Number(payment.commission) || 0;
+    setIncludeCommission(storedCommission !== 0 || expectedFee === 0);
     setFormError(null);
   }, [formatCreatedAtForInput]);
 
@@ -311,6 +315,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
     setAmount("");
     setSelectedPaymentMethod("");
     setSelectedStatus(PAYMENT_STATUS_PENDING);
+    setIncludeCommission(true);
     const d = new Date();
     setCreatedAt(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
     setFormError(null);
@@ -513,6 +518,10 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
     return `${day} ${month} ${year}`;
   };
 
+  const handleToggleIncludeCommission = useCallback(() => {
+    setIncludeCommission((prev) => !prev);
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setFormError(null);
@@ -546,6 +555,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
         payment_method_id: selectedPaymentMethod,
         status: selectedStatus,
         created_at: created_at_iso,
+        add_commission: includeCommission,
       });
     } else {
       result = await createPaymentAction({
@@ -554,6 +564,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
         payment_method_id: selectedPaymentMethod,
         status: selectedStatus,
         created_at: created_at_iso,
+        add_commission: includeCommission,
       });
     }
     
@@ -567,6 +578,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
     setAmount("");
     setSelectedPaymentMethod("");
     setSelectedStatus(PAYMENT_STATUS_PENDING);
+    setIncludeCommission(true);
     const d = new Date();
     setCreatedAt(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
     router.refresh();
@@ -908,8 +920,8 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
             </div>
           )}
           </div>
-          {/* Fila 2: admin → Estado · Monto | no-admin → Fecha · Monto */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Fila 2: admin → Estado · Añadir comisión · Monto | no-admin → Fecha · Añadir comisión · Monto */}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           {canSeeEstado && (
             <div className="w-full">
               <label
@@ -934,13 +946,13 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
           {!canSeeEstado && (
             <div className="w-full">
               <label
-                htmlFor="payment-created-at"
+                htmlFor="payment-created-at-row2"
                 className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
               >
                 Fecha
               </label>
               <input
-                id="payment-created-at"
+                id="payment-created-at-row2"
                 type="date"
                 value={createdAt}
                 onChange={(e) => setCreatedAt(e.target.value)}
@@ -950,6 +962,32 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
               />
             </div>
           )}
+          <div className="flex w-full flex-row items-center justify-center space-x-3">
+            <span
+              id="add-commission-label"
+              className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+            >
+              Añadir comisión
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={includeCommission}
+              aria-labelledby="add-commission-label"
+              disabled={isSubmitting}
+              onClick={handleToggleIncludeCommission}
+              className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus:ring-emerald-400 dark:focus:ring-offset-zinc-900 ${
+                includeCommission ? "bg-emerald-600 dark:bg-emerald-500" : "bg-zinc-300 dark:bg-zinc-600"
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition-transform ${
+                  includeCommission ? "translate-x-6" : "translate-x-0.5"
+                }`}
+                aria-hidden
+              />
+            </button>
+          </div>
           <div className="w-full">
             <label
               htmlFor="payment-amount"
