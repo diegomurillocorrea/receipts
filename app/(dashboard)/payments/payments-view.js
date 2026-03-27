@@ -155,6 +155,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("");
   const [selectedStatus, setSelectedStatus] = useState(PAYMENT_STATUS_PENDING);
   const [includeCommission, setIncludeCommission] = useState(true);
+  const [customCommission, setCustomCommission] = useState("");
   const [amount, setAmount] = useState("");
   const [createdAt, setCreatedAt] = useState(() => {
     const d = new Date();
@@ -277,6 +278,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
     const expectedFee = computeServiceFee(Number(payment.total_amount));
     const storedCommission = Number(payment.commission) || 0;
     setIncludeCommission(storedCommission !== 0 || expectedFee === 0);
+    setCustomCommission(storedCommission !== expectedFee ? String(storedCommission) : "");
     setFormError(null);
   }, [formatCreatedAtForInput]);
 
@@ -287,6 +289,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
     setSelectedPaymentMethod("");
     setSelectedStatus(PAYMENT_STATUS_PENDING);
     setIncludeCommission(true);
+    setCustomCommission("");
     const d = new Date();
     setCreatedAt(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
     setFormError(null);
@@ -539,6 +542,17 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
       setFormError("Selecciona un método de pago.");
       return;
     }
+    const parsedCustomCommission =
+      !includeCommission || customCommission.trim() === ""
+        ? null
+        : Number(customCommission);
+    if (
+      parsedCustomCommission != null &&
+      (Number.isNaN(parsedCustomCommission) || parsedCustomCommission < 0)
+    ) {
+      setFormError("La comisión personalizada debe ser 0 o mayor.");
+      return;
+    }
     setIsSubmitting(true);
     
     const created_at_iso = (() => {
@@ -557,6 +571,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
         status: selectedStatus,
         created_at: created_at_iso,
         add_commission: includeCommission,
+        custom_commission: parsedCustomCommission,
       });
     } else {
       result = await createPaymentAction({
@@ -566,6 +581,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
         status: selectedStatus,
         created_at: created_at_iso,
         add_commission: includeCommission,
+        custom_commission: parsedCustomCommission,
       });
     }
     
@@ -580,6 +596,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
     setSelectedPaymentMethod("");
     setSelectedStatus(PAYMENT_STATUS_PENDING);
     setIncludeCommission(true);
+    setCustomCommission("");
     const d = new Date();
     setCreatedAt(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
     router.refresh();
@@ -933,31 +950,54 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
               />
             </div>
           )}
-          <div className="flex w-full flex-row items-center justify-center space-x-3">
-            <span
-              id="add-commission-label"
-              className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-            >
-              Añadir comisión
-            </span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={includeCommission}
-              aria-labelledby="add-commission-label"
-              disabled={isSubmitting}
-              onClick={handleToggleIncludeCommission}
-              className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus:ring-emerald-400 dark:focus:ring-offset-zinc-900 ${
-                includeCommission ? "bg-emerald-600 dark:bg-emerald-500" : "bg-zinc-300 dark:bg-zinc-600"
-              }`}
-            >
-              <span
-                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition-transform ${
-                  includeCommission ? "translate-x-6" : "translate-x-0.5"
-                }`}
-                aria-hidden
-              />
-            </button>
+          <div className="w-full">
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <label
+                htmlFor="payment-custom-commission"
+                className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              >
+                Comisión personalizada
+              </label>
+              <div className="flex items-center gap-1.5">
+                <span
+                  id="add-commission-label"
+                  className="text-xs font-medium text-zinc-600 dark:text-zinc-400"
+                >
+                  Añadir comisión
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={includeCommission}
+                  aria-labelledby="add-commission-label"
+                  disabled={isSubmitting}
+                  onClick={handleToggleIncludeCommission}
+                  className={`relative inline-flex h-6 w-10 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 dark:focus:ring-emerald-400 dark:focus:ring-offset-zinc-900 ${
+                    includeCommission ? "bg-emerald-600 dark:bg-emerald-500" : "bg-zinc-300 dark:bg-zinc-600"
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition-transform ${
+                      includeCommission ? "translate-x-5" : "translate-x-0.5"
+                    }`}
+                    aria-hidden
+                  />
+                </button>
+              </div>
+            </div>
+            <input
+              id="payment-custom-commission"
+              type="number"
+              min="0"
+              step="0.01"
+              value={customCommission}
+              onChange={(e) => setCustomCommission(e.target.value)}
+              disabled={isSubmitting || !includeCommission}
+              placeholder={includeCommission ? "Opcional (auto si vacío)" : "Activa 'Añadir comisión'"}
+              className={inputClass}
+              aria-invalid={!!formError}
+              aria-label="Comisión personalizada"
+            />
           </div>
           <div className="w-full">
             <label
@@ -991,61 +1031,6 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
             {isSubmitting ? "Guardando…" : editingPayment ? "Guardar" : "Registrar"}
           </button>
         </form>
-        {editingPayment && (canSeeProofActions || getProofPublicUrl(editingPayment)) && (
-          <div className="mt-4 rounded-xl border border-zinc-200/80 bg-zinc-50/50 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-800/50">
-            <span className="mb-2 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Comprobante de pago
-            </span>
-            {getProofPublicUrl(editingPayment) ? (
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => handleProofPreview(editingPayment)}
-                  className="text-sm font-medium text-emerald-600 underline-offset-2 hover:underline dark:text-emerald-400"
-                  aria-label="Ver comprobante"
-                >
-                  Ver comprobante
-                </button>
-                {canSeeProofActions && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => handleProofRemove(editingPayment)}
-                      disabled={proofRemovingId === editingPayment.id}
-                      className="text-sm font-medium text-red-600 underline-offset-2 hover:underline disabled:opacity-50 dark:text-red-400"
-                      aria-label="Quitar comprobante"
-                    >
-                      {proofRemovingId === editingPayment.id ? "Quitando…" : "Quitar comprobante"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleProofUploadOpen(editingPayment)}
-                      className="text-sm font-medium text-zinc-600 underline-offset-2 hover:underline dark:text-zinc-400"
-                      aria-label="Reemplazar comprobante"
-                    >
-                      Reemplazar
-                    </button>
-                  </>
-                )}
-              </div>
-            ) : (
-              canSeeProofActions && (
-                <button
-                  type="button"
-                  onClick={() => handleProofUploadOpen(editingPayment)}
-                  className="rounded p-1.5 text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                  aria-label="Subir comprobante"
-                  title="Subir comprobante"
-                >
-                  <span className="inline-flex items-center gap-1">
-                    <Upload className="h-4 w-4" aria-hidden />
-                    <FileText className="h-4 w-4" aria-hidden />
-                  </span>
-                </button>
-              )
-            )}
-          </div>
-        )}
         {formError && (
           <div
             role="alert"

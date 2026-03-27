@@ -119,7 +119,7 @@ export async function searchReceiptsForPaymentAction(query) {
 }
 
 /**
- * @param {{ receipt_id: string; total_amount: number; payment_method_id: string; status?: number; created_at?: string; add_commission?: boolean }} payload
+ * @param {{ receipt_id: string; total_amount: number; payment_method_id: string; status?: number; created_at?: string; add_commission?: boolean; custom_commission?: number | null }} payload
  * @returns {Promise<{ error: string | null }>}
  */
 export async function createPaymentAction(payload) {
@@ -130,6 +130,10 @@ export async function createPaymentAction(payload) {
     payload.status === PAYMENT_STATUS_PAID ? PAYMENT_STATUS_PAID : PAYMENT_STATUS_PENDING;
   const created_at = payload.created_at?.trim() || null;
   const add_commission = payload.add_commission !== false;
+  const custom_commission =
+    payload.custom_commission == null || payload.custom_commission === ""
+      ? null
+      : Number(payload.custom_commission);
 
   if (!receipt_id) {
     return { error: "El recibo es requerido." };
@@ -142,13 +146,23 @@ export async function createPaymentAction(payload) {
   if (!payment_method_id) {
     return { error: "El método de pago es requerido." };
   }
+  if (
+    custom_commission != null &&
+    (Number.isNaN(custom_commission) || custom_commission < 0)
+  ) {
+    return { error: "La comisión personalizada debe ser cero o mayor." };
+  }
+
+  const finalCommission = add_commission
+    ? custom_commission ?? computeCommission(total_amount)
+    : 0;
 
   const insertPayload = {
     receipt_id,
     total_amount,
     payment_method_id,
     status,
-    commission: add_commission ? computeCommission(total_amount) : 0,
+    commission: finalCommission,
   };
   if (created_at) {
     insertPayload.created_at = created_at;
@@ -168,7 +182,7 @@ export async function createPaymentAction(payload) {
 
 /**
  * @param {string} id
- * @param {{ receipt_id: string; total_amount: number; payment_method_id: string; status?: number; created_at?: string; add_commission?: boolean }} payload
+ * @param {{ receipt_id: string; total_amount: number; payment_method_id: string; status?: number; created_at?: string; add_commission?: boolean; custom_commission?: number | null }} payload
  * @returns {Promise<{ error: string | null }>}
  */
 export async function updatePaymentAction(id, payload) {
@@ -183,6 +197,10 @@ export async function updatePaymentAction(id, payload) {
     payload.status === PAYMENT_STATUS_PAID ? PAYMENT_STATUS_PAID : PAYMENT_STATUS_PENDING;
   const created_at = payload.created_at?.trim() || null;
   const add_commission = payload.add_commission !== false;
+  const custom_commission =
+    payload.custom_commission == null || payload.custom_commission === ""
+      ? null
+      : Number(payload.custom_commission);
 
   if (!receipt_id) {
     return { error: "El recibo es requerido." };
@@ -195,13 +213,23 @@ export async function updatePaymentAction(id, payload) {
   if (!payment_method_id) {
     return { error: "El método de pago es requerido." };
   }
+  if (
+    custom_commission != null &&
+    (Number.isNaN(custom_commission) || custom_commission < 0)
+  ) {
+    return { error: "La comisión personalizada debe ser cero o mayor." };
+  }
+
+  const finalCommission = add_commission
+    ? custom_commission ?? computeCommission(total_amount)
+    : 0;
 
   const updatePayload = {
     receipt_id,
     total_amount,
     payment_method_id,
     status,
-    commission: add_commission ? computeCommission(total_amount) : 0,
+    commission: finalCommission,
   };
   if (created_at) {
     updatePayload.created_at = created_at;
