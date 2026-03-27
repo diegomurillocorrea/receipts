@@ -40,15 +40,6 @@ const MONTHS_ES = [
   "jul", "ago", "sep", "oct", "nov", "dic",
 ];
 
-/** Format YYYY-MM-DD to display string (e.g. "26 feb 2026") for date filter input */
-function formatDateForDisplay(isoDateStr) {
-  if (!isoDateStr) return "";
-  const [y, m, d] = isoDateStr.split("-").map(Number);
-  if (!y || !m || !d) return isoDateStr;
-  const month = MONTHS_ES[m - 1] ?? String(m);
-  return `${d} ${month} ${y}`;
-}
-
 function formatDate(isoString) {
   if (!isoString) return "—";
   const d = new Date(isoString);
@@ -196,7 +187,6 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
   const searchTimeoutRef = useRef(null);
   const comboboxRef = useRef(null);
   const filterDropdownRef = useRef(null);
-  const dateInputRef = useRef(null);
   const paymentMethods = initialPaymentMethods ?? [];
 
   const isAdmin = userEmail === ALLOWED_ADMIN_EMAIL;
@@ -712,46 +702,15 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
             )}
           </div>
 
-          <div className="relative xl:w-48">
+          <div className="xl:w-48">
             <input
-              ref={dateInputRef}
+              id="payments-filter-date"
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="absolute inset-0 size-full cursor-pointer opacity-0"
+              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-base text-zinc-900 transition-all hover:border-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50 dark:hover:border-zinc-500 dark:focus:border-emerald-400 dark:focus:ring-emerald-500/30"
               aria-label="Seleccionar fecha"
             />
-            <button
-              type="button"
-              onClick={() => {
-                const input = dateInputRef.current;
-                if (input) {
-                  if (typeof input.showPicker === "function") {
-                    input.showPicker();
-                  } else {
-                    input.click();
-                  }
-                }
-              }}
-              className="flex w-full items-center justify-between gap-2 rounded-xl border border-zinc-300 bg-white px-4 py-3 text-left text-base text-zinc-900 transition-all hover:border-zinc-400 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50 dark:hover:border-zinc-500"
-              aria-label="Seleccionar fecha"
-            >
-              <span>{formatDateForDisplay(selectedDate)}</span>
-              <svg
-                className="size-5 shrink-0 opacity-60"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                aria-hidden
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                />
-              </svg>
-            </button>
           </div>
         </div>
 
