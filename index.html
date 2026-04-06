@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cartel Suscripciones</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            green: '#00BC7D',
+                            red: '#CC3431'
+                        },
+                        streaming: {
+                            netflix: '#E50914',
+                            disney: '#113CCF',
+                            crunchyroll: '#F47521',
+                            prime: '#00A8E1',
+                            youtube: '#FF0000',
+                            spotify: '#1DB954'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #e5e7eb;
+        }
+        .story-container {
+            width: 1080px;
+            height: 1920px;
+            transform-origin: top left;
+        }
+        @media (max-width: 600px) {
+            .preview-wrapper {
+                transform: scale(0.32);
+                height: 620px;
+            }
+        }
+        @media (min-width: 601px) {
+            .preview-wrapper {
+                transform: scale(0.4);
+                height: 770px;
+            }
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen py-8 overflow-x-hidden">
+
+    <!-- Botón de descarga -->
+    <div class="mb-6 z-10 relative text-center">
+        <h1 class="text-2xl font-bold text-gray-800 mb-2">Vista Previa - Suscripciones</h1>
+        <p class="text-gray-600 mb-4 text-sm">Haz clic en el botón para guardar la imagen lista para imprimir.</p>
+        <button onclick="downloadPoster()" class="bg-gray-900 hover:bg-black text-white font-bold py-3 px-6 rounded-full shadow-lg transition transform hover:scale-105 flex items-center gap-2 mx-auto">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            </svg>
+            Descargar Imagen para Imprimir
+        </button>
+        <p id="loading-msg" class="text-sm text-brand-green font-semibold mt-2 hidden">¡Generando imagen, por favor espera...</p>
+    </div>
+
+    <!-- Contenedor -->
+    <div class="preview-wrapper relative mx-auto w-[1080px]">
+        
+        <!-- DISEÑO DEL CARTEL -->
+        <div id="poster" class="story-container relative bg-white shadow-2xl flex flex-col border border-gray-200">
+            
+            <!-- Encabezado con Logo -->
+            <div class="relative pt-10 pb-8 px-12 text-center z-10 bg-gray-50 border-b-4 border-brand-green">
+                
+                <!-- Logo DAIEGO -->
+                <div class="flex justify-center mb-6">
+                    <img src="DAIEGO.jpg" alt="Logo DAIEGO" class="h-32 object-contain rounded-xl shadow-sm border border-gray-200 bg-black">
+                </div>
+
+                <div class="inline-block bg-brand-red text-white font-black px-8 py-3 rounded-full text-3xl mb-4 shadow-md tracking-wider uppercase border-2 border-brand-red">
+                    ¡Entretenimiento Premium!
+                </div>
+                <h1 class="text-[75px] font-black text-gray-900 leading-none drop-shadow-sm tracking-tight uppercase">
+                    Suscripción de
+                </h1>
+                <h1 class="text-[55px] font-black text-brand-green leading-tight mb-2 drop-shadow-sm uppercase">
+                    Plataformas de Streaming
+                </h1>
+                <p class="text-[34px] text-gray-700 mt-2 font-bold">Series, películas y música sin pausas 🍿</p>
+            </div>
+
+            <!-- Contenido / Categorías (Grid de 6 servicios) -->
+            <div class="relative flex-1 px-12 py-10 z-10 flex flex-col gap-8 justify-center">
+                
+                <div class="grid grid-cols-2 gap-8">
+                    
+                    <!-- Netflix -->
+                    <div class="bg-white rounded-[40px] p-8 border-4 border-gray-200 shadow-xl flex flex-col justify-between items-center relative overflow-hidden text-center">
+                        <div class="absolute top-0 w-full h-4 bg-streaming-netflix"></div>
+                        <h2 class="text-[55px] font-black text-gray-900 mt-4 mb-1 tracking-tight">NETFLIX</h2>
+                        <p class="text-2xl text-gray-500 font-bold mb-6 uppercase tracking-widest">Películas y Series</p>
+                        <div class="bg-gray-900 text-white w-full py-5 rounded-3xl shadow-lg border-b-8 border-brand-red">
+                            <span class="text-[65px] font-black">$5</span><span class="text-3xl font-bold">/mes</span>
+                        </div>
+                    </div>
+
+                    <!-- Disney+ -->
+                    <div class="bg-white rounded-[40px] p-8 border-4 border-gray-200 shadow-xl flex flex-col justify-between items-center relative overflow-hidden text-center">
+                        <div class="absolute top-0 w-full h-4 bg-streaming-disney"></div>
+                        <h2 class="text-[55px] font-black text-gray-900 mt-4 mb-1 tracking-tight">DISNEY+</h2>
+                        <p class="text-2xl text-gray-500 font-bold mb-6 uppercase tracking-widest">Magia y Acción</p>
+                        <div class="bg-gray-900 text-white w-full py-5 rounded-3xl shadow-lg border-b-8 border-brand-green">
+                            <span class="text-[65px] font-black">$6</span><span class="text-3xl font-bold">/mes</span>
+                        </div>
+                    </div>
+
+                    <!-- Crunchyroll -->
+                    <div class="bg-white rounded-[40px] p-8 border-4 border-gray-200 shadow-xl flex flex-col justify-between items-center relative overflow-hidden text-center">
+                        <div class="absolute top-0 w-full h-4 bg-streaming-crunchyroll"></div>
+                        <h2 class="text-[52px] font-black text-gray-900 mt-4 mb-1 tracking-tight">CRUNCHYROLL</h2>
+                        <p class="text-2xl text-gray-500 font-bold mb-6 uppercase tracking-widest">Lo mejor del Anime</p>
+                        <div class="bg-gray-900 text-white w-full py-5 rounded-3xl shadow-lg border-b-8 border-brand-red">
+                            <span class="text-[65px] font-black">$2.50</span><span class="text-3xl font-bold">/mes</span>
+                        </div>
+                    </div>
+
+                    <!-- Amazon Prime Video -->
+                    <div class="bg-white rounded-[40px] p-8 border-4 border-gray-200 shadow-xl flex flex-col justify-between items-center relative overflow-hidden text-center">
+                        <div class="absolute top-0 w-full h-4 bg-streaming-prime"></div>
+                        <h2 class="text-[50px] font-black text-gray-900 mt-4 mb-1 tracking-tight leading-none">PRIME VIDEO</h2>
+                        <p class="text-2xl text-gray-500 font-bold mb-6 uppercase tracking-widest mt-2">Series Exclusivas</p>
+                        <div class="bg-gray-900 text-white w-full py-5 rounded-3xl shadow-lg border-b-8 border-brand-green">
+                            <span class="text-[65px] font-black">$3</span><span class="text-3xl font-bold">/mes</span>
+                        </div>
+                    </div>
+
+                    <!-- YouTube Premium -->
+                    <div class="bg-white rounded-[40px] p-8 border-4 border-gray-200 shadow-xl flex flex-col justify-between items-center relative overflow-hidden text-center">
+                        <div class="absolute top-0 w-full h-4 bg-streaming-youtube"></div>
+                        <h2 class="text-[48px] font-black text-gray-900 mt-4 mb-1 tracking-tight leading-none">YOUTUBE PREM.</h2>
+                        <p class="text-2xl text-gray-500 font-bold mb-6 uppercase tracking-widest mt-2">Videos sin anuncios</p>
+                        <div class="bg-gray-900 text-white w-full py-5 rounded-3xl shadow-lg border-b-8 border-brand-red">
+                            <span class="text-[65px] font-black">$6.50</span><span class="text-3xl font-bold">/mes</span>
+                        </div>
+                    </div>
+
+                    <!-- Spotify -->
+                    <div class="bg-white rounded-[40px] p-8 border-4 border-gray-200 shadow-xl flex flex-col justify-between items-center relative overflow-hidden text-center">
+                        <div class="absolute top-0 w-full h-4 bg-streaming-spotify"></div>
+                        <h2 class="text-[55px] font-black text-gray-900 mt-4 mb-1 tracking-tight">SPOTIFY</h2>
+                        <p class="text-2xl text-gray-500 font-bold mb-6 uppercase tracking-widest">Música Ilimitada</p>
+                        <div class="bg-gray-900 text-white w-full py-5 rounded-3xl shadow-lg border-b-8 border-brand-green">
+                            <span class="text-[65px] font-black">$4.50</span><span class="text-3xl font-bold">/mes</span>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- Footer / Llamado a la acción -->
+            <div class="bg-gray-900 mt-auto py-10 text-center z-10 border-t-8 border-brand-green">
+                <p class="text-[52px] font-black text-white mb-3">📲 ¡Activa tu cuenta aquí!</p>
+                <p class="text-3xl text-brand-green font-bold">Aceptamos efectivo y transferencias</p>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        function downloadPoster() {
+            const poster = document.getElementById('poster');
+            const btn = document.querySelector('button');
+            const msg = document.getElementById('loading-msg');
+            
+            msg.classList.remove('hidden');
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
+            btn.disabled = true;
+
+            html2canvas(poster, {
+                scale: 1.5, // Alta resolución para impresión
+                useCORS: true,
+                backgroundColor: '#ffffff'
+            }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = 'Cartel-DAIEGO-Suscripciones.png';
+                link.href = canvas.toDataURL('image/png', 1.0);
+                link.click();
+
+                msg.classList.add('hidden');
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                btn.disabled = false;
+            }).catch(err => {
+                console.error('Error al generar la imagen:', err);
+                alert('Hubo un error al generar la imagen. Intenta desde una computadora.');
+                msg.classList.add('hidden');
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                btn.disabled = false;
+            });
+        }
+    </script>
+</body>
+</html>

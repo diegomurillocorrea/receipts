@@ -1,12 +1,25 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/middleware";
 
-const PUBLIC_PATHS = ["/login", "/signup", "/auth/callback"];
+/** Rutas accesibles sin sesión (incluye /post: cartel público). */
+const PUBLIC_PATHS = ["/login", "/signup", "/auth/callback", "/post", "/streaming"];
+
+/**
+ * Si ya hay sesión, estas rutas redirigen al inicio (evita ver login con cuenta activa).
+ * No incluir /post: los usuarios logueados deben poder ver el cartel sin ser enviados a /payments.
+ */
+const AUTH_REDIRECT_HOME_PATHS = ["/login", "/signup", "/auth/callback"];
+
+function matchesPathList(pathname, list) {
+  return list.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+}
 
 function isPublicPath(pathname) {
-  return PUBLIC_PATHS.some(
-    (path) => pathname === path || pathname.startsWith(`${path}/`)
-  );
+  return matchesPathList(pathname, PUBLIC_PATHS);
+}
+
+function shouldRedirectAuthenticatedUserToHome(pathname) {
+  return matchesPathList(pathname, AUTH_REDIRECT_HOME_PATHS);
 }
 
 export async function proxy(request) {
@@ -18,7 +31,7 @@ export async function proxy(request) {
     data: { session },
   } = await supabase.auth.getSession();
 
-  if (session && isPublicPath(pathname)) {
+  if (session && shouldRedirectAuthenticatedUserToHome(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);

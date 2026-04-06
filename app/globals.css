@@ -3,6 +3,14 @@
 @theme inline {
   --font-sans: var(--font-poppins);
   --font-mono: var(--font-geist-mono);
+  --color-brand-green: #00bc7d;
+  --color-brand-red: #cc3431;
+  --color-streaming-netflix: #e50914;
+  --color-streaming-disney: #113ccf;
+  --color-streaming-crunchyroll: #f47521;
+  --color-streaming-prime: #00a8e1;
+  --color-streaming-youtube: #ff0000;
+  --color-streaming-spotify: #1db954;
   /* Breakpoints Tailwind:
      sm: 640px, md: 768px, lg: 1024px, xl: 1280px, 2xl: 1536px */
   --breakpoint-sm: 40rem;   /* 640px */

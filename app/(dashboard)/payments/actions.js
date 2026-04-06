@@ -31,11 +31,29 @@ function sanitizeFilenamePart(value) {
 
 /**
  * @param {Date} d
- * @returns {string} e.g. 2026-03-25_14-07
+ * @returns {string} e.g. 2026-03-25_14-07-32
  */
 function formatTimestampForFilename(d) {
   const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
+}
+
+/**
+ * @param {unknown} err
+ * @returns {boolean}
+ */
+function isStorageObjectAlreadyExistsError(err) {
+  if (err == null) return false
+  const msg = String(
+    /** @type {{ message?: string; error?: string }} */ (err).message ??
+      /** @type {{ error?: string }} */ (err).error ??
+      ""
+  ).toLowerCase()
+  if (msg.includes("already exists") || msg.includes("resource already") || msg.includes("duplicate")) {
+    return true
+  }
+  const code = /** @type {{ statusCode?: string | number }} */ (err).statusCode
+  return code === 409 || code === "409"
 }
 
 /**
@@ -51,6 +69,31 @@ function normalizePhoneForWhatsApp(phone) {
   if (digits.startsWith("503")) return digits;
   if (digits.startsWith("0")) return "503" + digits.slice(1);
   return digits;
+}
+
+/**
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {string} bucket
+ * @param {string} storagePath
+ * @param {string} clientName
+ * @param {string | undefined} phoneRaw
+ * @returns {{ error: string | null; publicUrl?: string; whatsappUrl?: string | null }}
+ */
+function buildVoucherShareResult(supabase, bucket, storagePath, clientName, phoneRaw) {
+  const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(storagePath);
+  const publicUrl = urlData?.publicUrl;
+  if (!publicUrl) {
+    return { error: "No se pudo obtener la URL publica del PDF." };
+  }
+  const phone = phoneRaw?.trim() ?? "";
+  const normalized = normalizePhoneForWhatsApp(phone);
+  const message = `Se adjunta comprobante de pago para ${clientName}: ${publicUrl}`;
+  const whatsappUrl = normalized
+    ? `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`
+    : null;
+  revalidatePath("/payments");
+  revalidatePath("/");
+  return { error: null, publicUrl, whatsappUrl };
 }
 
 const SEARCH_DEBOUNCE_MIN_LENGTH = 2;
@@ -421,7 +464,7 @@ export async function generatePaymentVoucherPdfAction(paymentId) {
   const { data: payment, error: fetchError } = await supabase
     .from("payments")
     .select(
-      "id, total_amount, commission, status, created_at, receipts(account_receipt_number, clients(name, last_name, phone_number), services(name)), payment_methods(name)"
+      "id, total_amount, commission, status, created_at, voucher_pdf_bucket, voucher_pdf_path, receipts(account_receipt_number, clients(name, last_name, phone_number), services(name)), payment_methods(name)"
     )
     .eq("id", paymentId)
     .single();
@@ -444,6 +487,12 @@ export async function generatePaymentVoucherPdfAction(paymentId) {
     payment.status === PAYMENT_STATUS_PAID
       ? STATUS_LABELS[PAYMENT_STATUS_PAID]
       : STATUS_LABELS[PAYMENT_STATUS_PENDING];
+
+  const existingBucket = payment.voucher_pdf_bucket?.trim();
+  const existingPath = payment.voucher_pdf_path?.trim();
+  if (existingBucket && existingPath) {
+    return buildVoucherShareResult(supabase, existingBucket, existingPath, clientName, client?.phone_number);
+  }
 
   const pdfBytes = await buildPaymentVoucherPdfBytes({
     paymentId: payment.id,
@@ -468,6 +517,25 @@ export async function generatePaymentVoucherPdfAction(paymentId) {
     });
 
   if (uploadError) {
+    if (isStorageObjectAlreadyExistsError(uploadError)) {
+      const { error: updateDupError } = await supabase
+        .from("payments")
+        .update({
+          voucher_pdf_bucket: PAYMENT_VOUCHER_BUCKET,
+          voucher_pdf_path: storagePath,
+        })
+        .eq("id", paymentId);
+      if (updateDupError) {
+        return { error: updateDupError.message };
+      }
+      return buildVoucherShareResult(
+        supabase,
+        PAYMENT_VOUCHER_BUCKET,
+        storagePath,
+        clientName,
+        client?.phone_number
+      );
+    }
     return { error: uploadError.message };
   }
 
@@ -483,25 +551,11 @@ export async function generatePaymentVoucherPdfAction(paymentId) {
     return { error: updateError.message };
   }
 
-  const { data: urlData } = supabase.storage
-    .from(PAYMENT_VOUCHER_BUCKET)
-    .getPublicUrl(storagePath);
-
-  const publicUrl = urlData?.publicUrl;
-  if (!publicUrl) {
-    return { error: "No se pudo obtener la URL publica del PDF." };
-  }
-
-  const phone = client?.phone_number?.trim() ?? "";
-  const normalized = normalizePhoneForWhatsApp(phone);
-  const message = `Se adjunta comprobante de pago para ${clientName}: ${publicUrl}`;
-
-  const whatsappUrl = normalized
-    ? `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`
-    : null;
-
-  revalidatePath("/payments");
-  revalidatePath("/");
-
-  return { error: null, publicUrl, whatsappUrl };
+  return buildVoucherShareResult(
+    supabase,
+    PAYMENT_VOUCHER_BUCKET,
+    storagePath,
+    clientName,
+    client?.phone_number
+  );
 }
