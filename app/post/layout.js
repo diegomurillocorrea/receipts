@@ -1,6 +1,6 @@
 export const metadata = {
-  title: "Cartel — Pagos",
-  description: "Cartel DAIEGO para pagos de recibos y servicios",
+  title: "Post",
+  description: "DAIEGO para pagos de recibos y servicios",
 };
 
 export default function PostLayout({ children }) {
