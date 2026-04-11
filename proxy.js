@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/middleware";
 
-/** Rutas accesibles sin sesión (incluye /post: cartel público). */
-const PUBLIC_PATHS = ["/login", "/signup", "/auth/callback", "/post", "/streaming"];
+/** Rutas accesibles sin sesión. */
+const PUBLIC_PATHS = ["/login", "/signup", "/auth/callback", "/streaming"];
 
 /**
  * Si ya hay sesión, estas rutas redirigen al inicio (evita ver login con cuenta activa).
- * No incluir /post: los usuarios logueados deben poder ver el cartel sin ser enviados a /payments.
  */
 const AUTH_REDIRECT_HOME_PATHS = ["/login", "/signup", "/auth/callback"];
 
