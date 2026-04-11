@@ -1,11 +1,5 @@
-import { PostPdfDownload } from "./post-pdf-download";
-import { PostView } from "./post-view";
+import { PostPageContent } from "./post-page-content";
 
 export default function PostPage() {
-  return (
-    <>
-      <PostPdfDownload />
-      <PostView />
-    </>
-  );
+  return <PostPageContent />;
 }

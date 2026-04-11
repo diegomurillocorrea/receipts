@@ -9,6 +9,9 @@ const POSTER_ID = "poster";
 /** Puntos: A4 vertical (tamaño habitual al imprimir / previsualizar). */
 const A4_W_PT = 595.28;
 const A4_H_PT = 841.89;
+/** Carta US en puntos (72 dpi): 8.5" × 11". */
+const LETTER_W_PT = 612;
+const LETTER_H_PT = 792;
 const PDF_MARGIN_PT = 28;
 
 const hasModernColorFn = (val) =>
@@ -233,22 +236,22 @@ const capturePosterToCanvas = async (poster, scale) => {
   });
 };
 
-/** Encaja la imagen en A4 con márgenes; evita página “enorme” y bordes raros en el visor. */
-const buildPdfWithImageFitA4 = async (pngBytes) => {
+/** Encaja la imagen en la página con márgenes; evita página “enorme” y bordes raros en el visor. */
+const buildPdfWithImageFitPage = async (pngBytes, pageWidthPt, pageHeightPt) => {
   const pdfDoc = await PDFDocument.create();
   const image = await pdfDoc.embedPng(pngBytes);
   const iw = image.width;
   const ih = image.height;
 
-  const maxW = A4_W_PT - 2 * PDF_MARGIN_PT;
-  const maxH = A4_H_PT - 2 * PDF_MARGIN_PT;
+  const maxW = pageWidthPt - 2 * PDF_MARGIN_PT;
+  const maxH = pageHeightPt - 2 * PDF_MARGIN_PT;
   const fit = Math.min(maxW / iw, maxH / ih, 1);
   const dw = iw * fit;
   const dh = ih * fit;
-  const x = (A4_W_PT - dw) / 2;
-  const y = (A4_H_PT - dh) / 2;
+  const x = (pageWidthPt - dw) / 2;
+  const y = (pageHeightPt - dh) / 2;
 
-  const page = pdfDoc.addPage([A4_W_PT, A4_H_PT]);
+  const page = pdfDoc.addPage([pageWidthPt, pageHeightPt]);
   page.drawImage(image, {
     x,
     y,
@@ -261,6 +264,12 @@ const buildPdfWithImageFitA4 = async (pngBytes) => {
 
 export function PostPdfDownload({
   downloadFileName = "Cartel-DAIEGO.pdf",
+  /** Si true, solo el botón (sin contenedor sticky); útil en barras de herramientas. */
+  embedded = false,
+  /** "a4" por defecto; "letter" para carta US (p. ej. vista Post). */
+  pageFormat = "a4",
+  /** Con pageFormat "letter": true = apaisado 11"×8.5". */
+  letterLandscape = false,
 }) {
   const [isExporting, setIsExporting] = useState(false);
 
@@ -291,7 +300,13 @@ export function PostPdfDownload({
       }
 
       const pngBytes = await canvasToPngBytes(canvas);
-      const pdfBytes = await buildPdfWithImageFitA4(pngBytes);
+      let pageW = A4_W_PT;
+      let pageH = A4_H_PT;
+      if (pageFormat === "letter") {
+        pageW = letterLandscape ? LETTER_H_PT : LETTER_W_PT;
+        pageH = letterLandscape ? LETTER_W_PT : LETTER_H_PT;
+      }
+      const pdfBytes = await buildPdfWithImageFitPage(pngBytes, pageW, pageH);
 
       const pdfBlob = new Blob([pdfBytes], { type: "application/pdf" });
       const url = URL.createObjectURL(pdfBlob);
@@ -310,7 +325,7 @@ export function PostPdfDownload({
     } finally {
       setIsExporting(false);
     }
-  }, [downloadFileName]);
+  }, [downloadFileName, pageFormat, letterLandscape]);
 
   const handleKeyDown = useCallback(
     (e) => {
@@ -322,35 +337,43 @@ export function PostPdfDownload({
     [handleDownloadPdf, isExporting]
   );
 
+  const button = (
+    <button
+      type="button"
+      onClick={handleDownloadPdf}
+      onKeyDown={handleKeyDown}
+      disabled={isExporting}
+      aria-busy={isExporting}
+      aria-label={
+        isExporting ? "Generando PDF del cartel" : "Descargar cartel como PDF"
+      }
+      className="inline-flex items-center gap-2 rounded-full bg-gradient-to-b from-zinc-800 to-zinc-950 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-zinc-900/30 ring-1 ring-white/10 transition hover:from-zinc-700 hover:to-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-white disabled:cursor-not-allowed disabled:opacity-60 dark:focus:ring-offset-zinc-950"
+    >
+      <svg
+        className="h-5 w-5 shrink-0"
+        fill="none"
+        stroke="currentColor"
+        viewBox="0 0 24 24"
+        aria-hidden
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+        />
+      </svg>
+      {isExporting ? "Generando PDF…" : "Descargar PDF"}
+    </button>
+  );
+
+  if (embedded) {
+    return button;
+  }
+
   return (
     <div className="sticky top-0 z-50 flex w-full justify-center px-4 pb-3 pt-2">
-      <button
-        type="button"
-        onClick={handleDownloadPdf}
-        onKeyDown={handleKeyDown}
-        disabled={isExporting}
-        aria-busy={isExporting}
-        aria-label={
-          isExporting ? "Generando PDF del cartel" : "Descargar cartel como PDF"
-        }
-        className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-lg ring-1 ring-black/10 transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-green focus:ring-offset-2 focus:ring-offset-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        <svg
-          className="h-5 w-5 shrink-0"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-          />
-        </svg>
-        {isExporting ? "Generando PDF…" : "Descargar PDF"}
-      </button>
+      {button}
     </div>
   );
 }
