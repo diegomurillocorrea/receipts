@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { PostPdfDownload } from "./post-pdf-download";
 import { PostView } from "./post-view";
 
 export function PostPageContent() {
@@ -63,12 +62,6 @@ export function PostPageContent() {
             Horizontal (carta)
           </button>
         </div>
-
-        <PostPdfDownload
-          embedded
-          pageFormat="letter"
-          letterLandscape={landscape}
-        />
       </header>
       <PostView landscape={landscape} />
     </>
