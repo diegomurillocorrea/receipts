@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useCallback, useMemo } from "react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
+import { usePermissions } from "../permissions-provider";
 import {
   createPaymentMethodAction,
   updatePaymentMethodAction,
@@ -27,6 +28,10 @@ export function PaymentMethodsView({ initialPaymentMethods, fetchError }) {
   const router = useRouter();
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === "mobile";
+  const { can } = usePermissions();
+  const canCreate = can("payment_methods", "create");
+  const canEdit = can("payment_methods", "edit");
+  const canDelete = can("payment_methods", "delete");
   const paymentMethods = initialPaymentMethods;
   const [formOpen, setFormOpen] = useState(null);
   const [formData, setFormData] = useState(EMPTY_FORM);
@@ -132,6 +137,7 @@ export function PaymentMethodsView({ initialPaymentMethods, fetchError }) {
             Ver y gestionar métodos de pago disponibles.
           </p>
         </div>
+        {canCreate && (
         <button
           type="button"
           onClick={openCreate}
@@ -140,6 +146,7 @@ export function PaymentMethodsView({ initialPaymentMethods, fetchError }) {
         >
           Agregar método
         </button>
+        )}
       </header>
 
       {fetchError && (
@@ -194,6 +201,7 @@ export function PaymentMethodsView({ initialPaymentMethods, fetchError }) {
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
               Aún no hay métodos de pago. Agrega tu primer método para comenzar.
             </p>
+            {canCreate && (
             <button
               type="button"
               onClick={openCreate}
@@ -202,6 +210,7 @@ export function PaymentMethodsView({ initialPaymentMethods, fetchError }) {
             >
               Agregar método
             </button>
+            )}
           </div>
         ) : filteredPaymentMethods.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-5 px-4 py-20 text-center">
@@ -235,7 +244,9 @@ export function PaymentMethodsView({ initialPaymentMethods, fetchError }) {
                     {formatDate(method.created_at)}
                   </span>
                 </div>
+                {(canEdit || canDelete) && (
                 <div className="flex gap-3 pt-2">
+                  {canEdit && (
                   <button
                     type="button"
                     onClick={() => openEdit(method)}
@@ -244,6 +255,8 @@ export function PaymentMethodsView({ initialPaymentMethods, fetchError }) {
                   >
                     Editar
                   </button>
+                  )}
+                  {canDelete && (
                   <button
                     type="button"
                     onClick={() => handleDeleteClick(method)}
@@ -252,7 +265,9 @@ export function PaymentMethodsView({ initialPaymentMethods, fetchError }) {
                   >
                     Eliminar
                   </button>
+                  )}
                 </div>
+                )}
               </li>
             ))}
           </ul>
@@ -270,9 +285,11 @@ export function PaymentMethodsView({ initialPaymentMethods, fetchError }) {
                   <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
                     Creado
                   </th>
+                  {(canEdit || canDelete) && (
                   <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
                     Acciones
                   </th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -290,8 +307,10 @@ export function PaymentMethodsView({ initialPaymentMethods, fetchError }) {
                     <td className="px-4 py-3.5 text-zinc-500 dark:text-zinc-500 tablet:px-6">
                       {formatDate(method.created_at)}
                     </td>
+                    {(canEdit || canDelete) && (
                     <td className="px-4 py-3.5 tablet:px-6">
                       <div className="flex gap-3">
+                        {canEdit && (
                         <button
                           type="button"
                           onClick={() => openEdit(method)}
@@ -300,6 +319,8 @@ export function PaymentMethodsView({ initialPaymentMethods, fetchError }) {
                         >
                           Editar
                         </button>
+                        )}
+                        {canDelete && (
                         <button
                           type="button"
                           onClick={() => handleDeleteClick(method)}
@@ -308,8 +329,10 @@ export function PaymentMethodsView({ initialPaymentMethods, fetchError }) {
                         >
                           Eliminar
                         </button>
+                        )}
                       </div>
                     </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

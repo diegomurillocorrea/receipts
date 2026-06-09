@@ -8,6 +8,7 @@ import { useBreakpoint } from "@/hooks/use-breakpoint";
 import { useTheme } from "@/hooks/use-theme";
 import { Footer } from "@/components/footer";
 import { DaiegoLogo } from "@/components/daiego-logo";
+import { PermissionsProvider, usePermissions } from "./permissions-provider";
 
 function useUser() {
   const [user, setUser] = useState(null);
@@ -45,14 +46,19 @@ function UserDisplay() {
 }
 
 const NAV_ITEMS = [
-  { href: "/payments", label: "Pagos" },
-  { href: "/clients", label: "Clientes" },
-  { href: "/services", label: "Servicios" },
-  { href: "/payment-methods", label: "Métodos de pago" },
-  { href: "/users", label: "Usuarios" },
+  { href: "/payments", label: "Pagos", resource: "payments" },
+  { href: "/clients", label: "Clientes", resource: "clients" },
+  { href: "/services", label: "Servicios", resource: "services" },
+  { href: "/payment-methods", label: "Métodos de pago", resource: "payment_methods" },
+  { href: "/users", label: "Usuarios", resource: "users" },
+  { href: "/roles", label: "Roles", resource: "roles" },
 ];
 
 function NavContent({ pathname, onNavClick, hideLogo, hideThemeToggle }) {
+  const { can, isLoading } = usePermissions();
+  const visibleItems = isLoading
+    ? NAV_ITEMS
+    : NAV_ITEMS.filter((item) => can(item.resource, "view"));
   return (
     <>
       {!hideLogo && (
@@ -73,7 +79,7 @@ function NavContent({ pathname, onNavClick, hideLogo, hideThemeToggle }) {
         </div>
       )}
       <nav className="flex flex-1 flex-col gap-1 p-3" role="navigation">
-        {NAV_ITEMS.map((item) => {
+        {visibleItems.map((item) => {
           const isActive =
             pathname === item.href ||
             (item.href !== "/" && pathname.startsWith(item.href));
@@ -189,6 +195,7 @@ export default function DashboardLayout({ children }) {
   const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
 
   return (
+    <PermissionsProvider>
     <div className="fixed inset-0 flex overflow-hidden bg-zinc-50 dark:bg-zinc-950">
       {/* Mobile: top bar with menu button */}
       {isMobile && (
@@ -306,5 +313,6 @@ export default function DashboardLayout({ children }) {
         </div>
       </main>
     </div>
+    </PermissionsProvider>
   );
 }

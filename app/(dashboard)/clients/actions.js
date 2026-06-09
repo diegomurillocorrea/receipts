@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { requirePermission } from "@/lib/auth/permissions";
 
 /**
  * @typedef {Object} ClientFormData
@@ -52,6 +53,9 @@ async function findClientByPhone(supabase, phoneNumber, excludeId) {
  * @returns {Promise<{ error: string | null; data?: { id: string }; duplicate?: ExistingClient }>}
  */
 export async function createClientAction(formData) {
+  const auth = await requirePermission("clients", "create");
+  if (auth.error) return { error: auth.error };
+
   const name = formData.name?.trim();
   const last_name = formData.last_name?.trim();
   const phone_number = formData.phone_number?.trim() || null;
@@ -104,6 +108,9 @@ export async function createClientAction(formData) {
  * @returns {Promise<{ error: string | null; duplicate?: ExistingClient }>}
  */
 export async function updateClientAction(id, formData) {
+  const auth = await requirePermission("clients", "edit");
+  if (auth.error) return { error: auth.error };
+
   if (!id) {
     return { error: "El ID del cliente es requerido." };
   }
@@ -159,6 +166,9 @@ export async function updateClientAction(id, formData) {
  * @returns {Promise<{ error: string | null }>}
  */
 export async function deleteClientAction(id) {
+  const auth = await requirePermission("clients", "delete");
+  if (auth.error) return { error: auth.error };
+
   if (!id) {
     return { error: "El ID del cliente es requerido." };
   }
@@ -181,6 +191,9 @@ export async function deleteClientAction(id) {
  * @returns {Promise<{ error: string | null; services?: { id: string; name: string }[] }>}
  */
 export async function getServicesListAction() {
+  const auth = await requirePermission("clients", "view");
+  if (auth.error) return { error: auth.error };
+
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("services")
@@ -198,6 +211,9 @@ export async function getServicesListAction() {
  * @returns {Promise<{ error: string | null; receipts?: { id: string; service_id: string; account_receipt_number: string }[] }>}
  */
 export async function getClientReceiptsAction(clientId) {
+  const auth = await requirePermission("clients", "view");
+  if (auth.error) return { error: auth.error };
+
   if (!clientId) {
     return { error: "El ID del cliente es requerido." };
   }
@@ -218,6 +234,9 @@ export async function getClientReceiptsAction(clientId) {
  * @returns {Promise<{ error: string | null }>}
  */
 export async function createReceiptAction(payload) {
+  const auth = await requirePermission("clients", "edit");
+  if (auth.error) return { error: auth.error };
+
   const account_receipt_number = payload.account_receipt_number?.trim();
   if (!payload.client_id || !payload.service_id || !account_receipt_number) {
     return { error: "El cliente, servicio y número de cuenta/recibo son requeridos." };
@@ -245,6 +264,9 @@ export async function createReceiptAction(payload) {
  * @returns {Promise<{ error: string | null }>}
  */
 export async function deleteReceiptAction(clientId, serviceId) {
+  const auth = await requirePermission("clients", "edit");
+  if (auth.error) return { error: auth.error };
+
   if (!clientId || !serviceId) {
     return { error: "El ID del cliente y el ID del servicio son requeridos." };
   }
@@ -271,6 +293,9 @@ export async function deleteReceiptAction(clientId, serviceId) {
  * @returns {Promise<{ error: string | null }>}
  */
 export async function deleteReceiptByIdAction(receiptId) {
+  const auth = await requirePermission("clients", "edit");
+  if (auth.error) return { error: auth.error };
+
   if (!receiptId) {
     return { error: "El ID del recibo es requerido." };
   }

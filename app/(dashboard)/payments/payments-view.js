@@ -4,7 +4,6 @@ import { useRouter } from "next/navigation";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Pencil, Trash2, Send, Eye, FileText, Upload, Info } from "lucide-react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
-import { createClient } from "@/lib/supabase/client";
 import {
   createPaymentAction,
   updatePaymentAction,
@@ -21,8 +20,7 @@ import {
   PAYMENT_STATUS_PAID,
   STATUS_LABELS,
 } from "./constants";
-
-const ALLOWED_ADMIN_EMAIL = "diegomurillocorrea@gmail.com";
+import { usePermissions } from "../permissions-provider";
 
 function getStatusLabel(status) {
   if (status === PAYMENT_STATUS_PAID) return STATUS_LABELS[PAYMENT_STATUS_PAID];
@@ -237,7 +235,13 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 });
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
-  const [userEmail, setUserEmail] = useState(null);
+  const { can } = usePermissions();
+  const canSeeEstado = can("payments", "view_status");
+  const canSeeProofActions = can("payments", "manage_proof");
+  const canSendVoucher = can("payments", "send_voucher");
+  const canCreatePayment = can("payments", "create");
+  const canEditPaymentPerm = can("payments", "edit");
+  const canDeletePayment = can("payments", "delete");
   const [consultaOpen, setConsultaOpen] = useState(false);
   const [consultaServices, setConsultaServices] = useState([]);
   const [consultaLoading, setConsultaLoading] = useState(false);
@@ -246,17 +250,6 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
   const comboboxRef = useRef(null);
   const filterDropdownRef = useRef(null);
   const paymentMethods = initialPaymentMethods ?? [];
-
-  const isAdmin = userEmail === ALLOWED_ADMIN_EMAIL;
-  const canSeeEstado = isAdmin;
-  const canSeeProofActions = isAdmin;
-
-  useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUserEmail(user?.email ?? null);
-    });
-  }, []);
 
   const runSearch = useCallback(async (query) => {
     const q = (query ?? "").trim();
@@ -850,6 +843,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
         </div>
       </section>
 
+      {(canCreatePayment || (editingPayment && canEditPaymentPerm)) && (
       <section className="rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 tablet:p-8">
         <div className="mb-5 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
@@ -1142,6 +1136,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
           un resultado para registrar el pago.
         </p>
       </section>
+      )}
 
       <section className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
         <div className="border-b border-zinc-200/80 bg-zinc-50/50 px-4 pb-3.5 pt-4 dark:border-zinc-800 dark:bg-zinc-800/30 tablet:px-6 tablet:pt-4">
@@ -1263,37 +1258,39 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                     </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-3 pt-1">
-                    {isAdmin && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => handleEditPayment(payment)}
-                          className="rounded p-1.5 text-emerald-600 hover:bg-emerald-100 dark:text-emerald-400 dark:hover:bg-emerald-900/40"
-                          aria-label={`Editar pago de ${getPaymentReceiptDisplay(payment)}`}
-                          title={`Editar pago de ${getPaymentReceiptDisplay(payment)}`}
-                        >
-                          <Pencil className="h-4 w-4" aria-hidden />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteClick(payment)}
-                          className="rounded p-1.5 text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/40"
-                          aria-label={`Eliminar pago de ${getPaymentReceiptDisplay(payment)}`}
-                          title={`Eliminar pago de ${getPaymentReceiptDisplay(payment)}`}
-                        >
-                          <Trash2 className="h-4 w-4" aria-hidden />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleSendVoucherWhatsApp(payment)}
-                          disabled={isSendingVoucher}
-                          className="rounded p-1.5 text-cyan-500 hover:bg-cyan-100 disabled:opacity-50 dark:text-cyan-400 dark:hover:bg-cyan-900/40"
-                          aria-label={`Generar PDF y enviar comprobante por WhatsApp a ${getPaymentReceiptDisplay(payment)}`}
-                          title="Genera un PDF con logo y datos, lo guarda y abre WhatsApp con el enlace al archivo"
-                        >
-                          <Send className={`h-4 w-4 ${isSendingVoucher ? "animate-pulse" : ""}`} aria-hidden />
-                        </button>
-                      </>
+                    {canEditPaymentPerm && (
+                      <button
+                        type="button"
+                        onClick={() => handleEditPayment(payment)}
+                        className="rounded p-1.5 text-emerald-600 hover:bg-emerald-100 dark:text-emerald-400 dark:hover:bg-emerald-900/40"
+                        aria-label={`Editar pago de ${getPaymentReceiptDisplay(payment)}`}
+                        title={`Editar pago de ${getPaymentReceiptDisplay(payment)}`}
+                      >
+                        <Pencil className="h-4 w-4" aria-hidden />
+                      </button>
+                    )}
+                    {canDeletePayment && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteClick(payment)}
+                        className="rounded p-1.5 text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/40"
+                        aria-label={`Eliminar pago de ${getPaymentReceiptDisplay(payment)}`}
+                        title={`Eliminar pago de ${getPaymentReceiptDisplay(payment)}`}
+                      >
+                        <Trash2 className="h-4 w-4" aria-hidden />
+                      </button>
+                    )}
+                    {canSendVoucher && (
+                      <button
+                        type="button"
+                        onClick={() => handleSendVoucherWhatsApp(payment)}
+                        disabled={isSendingVoucher}
+                        className="rounded p-1.5 text-cyan-500 hover:bg-cyan-100 disabled:opacity-50 dark:text-cyan-400 dark:hover:bg-cyan-900/40"
+                        aria-label={`Generar PDF y enviar comprobante por WhatsApp a ${getPaymentReceiptDisplay(payment)}`}
+                        title="Genera un PDF con logo y datos, lo guarda y abre WhatsApp con el enlace al archivo"
+                      >
+                        <Send className={`h-4 w-4 ${isSendingVoucher ? "animate-pulse" : ""}`} aria-hidden />
+                      </button>
                     )}
                     {getProofPublicUrl(payment) ? (
                       <>
@@ -1428,37 +1425,39 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                       </td>
                       <td className="px-4 py-3.5 text-center tablet:px-6">
                         <div className="flex flex-wrap items-center justify-center gap-3">
-                          {isAdmin && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => handleEditPayment(payment)}
-                                className="rounded p-1.5 text-emerald-600 hover:bg-emerald-100 dark:text-emerald-400 dark:hover:bg-emerald-900/40"
-                                aria-label={`Editar pago de ${getPaymentReceiptDisplay(payment)}`}
-                                title={`Editar pago de ${getPaymentReceiptDisplay(payment)}`}
-                              >
-                                <Pencil className="h-4 w-4" aria-hidden />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteClick(payment)}
-                                className="rounded p-1.5 text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/40"
-                                aria-label={`Eliminar pago de ${getPaymentReceiptDisplay(payment)}`}
-                                title={`Eliminar pago de ${getPaymentReceiptDisplay(payment)}`}
-                              >
-                                <Trash2 className="h-4 w-4" aria-hidden />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleSendVoucherWhatsApp(payment)}
-                                disabled={isSendingVoucher}
-                                className="rounded p-1.5 text-cyan-500 hover:bg-cyan-100 disabled:opacity-50 dark:text-cyan-400 dark:hover:bg-cyan-900/40"
-                                aria-label={`Generar PDF y enviar comprobante por WhatsApp a ${getPaymentReceiptDisplay(payment)}`}
-                                title="Genera un PDF con logo y datos, lo guarda y abre WhatsApp con el enlace al archivo"
-                              >
-                                <Send className={`h-4 w-4 ${isSendingVoucher ? "animate-pulse" : ""}`} aria-hidden />
-                              </button>
-                            </>
+                          {canEditPaymentPerm && (
+                            <button
+                              type="button"
+                              onClick={() => handleEditPayment(payment)}
+                              className="rounded p-1.5 text-emerald-600 hover:bg-emerald-100 dark:text-emerald-400 dark:hover:bg-emerald-900/40"
+                              aria-label={`Editar pago de ${getPaymentReceiptDisplay(payment)}`}
+                              title={`Editar pago de ${getPaymentReceiptDisplay(payment)}`}
+                            >
+                              <Pencil className="h-4 w-4" aria-hidden />
+                            </button>
+                          )}
+                          {canDeletePayment && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteClick(payment)}
+                              className="rounded p-1.5 text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/40"
+                              aria-label={`Eliminar pago de ${getPaymentReceiptDisplay(payment)}`}
+                              title={`Eliminar pago de ${getPaymentReceiptDisplay(payment)}`}
+                            >
+                              <Trash2 className="h-4 w-4" aria-hidden />
+                            </button>
+                          )}
+                          {canSendVoucher && (
+                            <button
+                              type="button"
+                              onClick={() => handleSendVoucherWhatsApp(payment)}
+                              disabled={isSendingVoucher}
+                              className="rounded p-1.5 text-cyan-500 hover:bg-cyan-100 disabled:opacity-50 dark:text-cyan-400 dark:hover:bg-cyan-900/40"
+                              aria-label={`Generar PDF y enviar comprobante por WhatsApp a ${getPaymentReceiptDisplay(payment)}`}
+                              title="Genera un PDF con logo y datos, lo guarda y abre WhatsApp con el enlace al archivo"
+                            >
+                              <Send className={`h-4 w-4 ${isSendingVoucher ? "animate-pulse" : ""}`} aria-hidden />
+                            </button>
                           )}
                           {getProofPublicUrl(payment) ? (
                             <>

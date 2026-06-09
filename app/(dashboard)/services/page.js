@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { requirePageView } from "@/lib/auth/page-access";
 import { ServicesView } from "./services-view";
 
 export const metadata = {
@@ -6,6 +7,7 @@ export const metadata = {
 };
 
 export default async function ServicesPage() {
+  await requirePageView("services");
   const supabase = await createClient();
   const { data: services = [], error } = await supabase
     .from("services")

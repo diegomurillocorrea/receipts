@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
+import { usePermissions } from "../permissions-provider";
 import {
   createClientAction,
   updateClientAction,
@@ -41,6 +42,10 @@ export function ClientsView({ initialClients, fetchError }) {
   const router = useRouter();
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === "mobile";
+  const { can } = usePermissions();
+  const canCreate = can("clients", "create");
+  const canEdit = can("clients", "edit");
+  const canDelete = can("clients", "delete");
   const clients = initialClients;
   const [formOpen, setFormOpen] = useState(null);
   const [formData, setFormData] = useState(EMPTY_FORM);
@@ -344,6 +349,7 @@ export function ClientsView({ initialClients, fetchError }) {
             Ver y gestionar clientes. Agregar o editar clientes y asignar servicios.
           </p>
         </div>
+        {canCreate && (
         <button
           type="button"
           onClick={openCreate}
@@ -352,6 +358,7 @@ export function ClientsView({ initialClients, fetchError }) {
         >
           Agregar cliente
         </button>
+        )}
       </header>
 
       {fetchError && (
@@ -406,6 +413,7 @@ export function ClientsView({ initialClients, fetchError }) {
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
               Aún no hay clientes. Agrega tu primer cliente para comenzar.
             </p>
+            {canCreate && (
             <button
               type="button"
               onClick={openCreate}
@@ -414,6 +422,7 @@ export function ClientsView({ initialClients, fetchError }) {
             >
               Agregar cliente
             </button>
+            )}
           </div>
         ) : filteredClients.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-5 px-4 py-20 text-center">
@@ -455,7 +464,9 @@ export function ClientsView({ initialClients, fetchError }) {
                     {formatDate(client.created_at)}
                   </span>
                 </div>
+                {(canEdit || canDelete) && (
                 <div className="flex gap-3 pt-2">
+                  {canEdit && (
                   <button
                     type="button"
                     onClick={() => openEdit(client)}
@@ -464,6 +475,8 @@ export function ClientsView({ initialClients, fetchError }) {
                   >
                     Editar
                   </button>
+                  )}
+                  {canDelete && (
                   <button
                     type="button"
                     onClick={() => handleDeleteClick(client)}
@@ -472,7 +485,9 @@ export function ClientsView({ initialClients, fetchError }) {
                   >
                     Eliminar
                   </button>
+                  )}
                 </div>
+                )}
               </li>
             ))}
           </ul>
@@ -499,9 +514,11 @@ export function ClientsView({ initialClients, fetchError }) {
                   <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
                     Creado
                   </th>
+                  {(canEdit || canDelete) && (
                   <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
                     Acciones
                   </th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -528,8 +545,10 @@ export function ClientsView({ initialClients, fetchError }) {
                     <td className="px-4 py-3.5 text-zinc-500 dark:text-zinc-500 tablet:px-6">
                       {formatDate(client.created_at)}
                     </td>
+                    {(canEdit || canDelete) && (
                     <td className="px-4 py-3.5 tablet:px-6">
                       <div className="flex gap-3">
+                        {canEdit && (
                         <button
                           type="button"
                           onClick={() => openEdit(client)}
@@ -538,6 +557,8 @@ export function ClientsView({ initialClients, fetchError }) {
                         >
                           Editar
                         </button>
+                        )}
+                        {canDelete && (
                         <button
                           type="button"
                           onClick={() => handleDeleteClick(client)}
@@ -546,8 +567,10 @@ export function ClientsView({ initialClients, fetchError }) {
                         >
                           Eliminar
                         </button>
+                        )}
                       </div>
                     </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

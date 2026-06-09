@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { requirePermission } from "@/lib/auth/permissions";
 import {
   SERVICE_IMAGE_ALLOWED_TYPES,
   SERVICE_IMAGE_BUCKET,
@@ -22,6 +23,9 @@ function normalizeLink(value) {
  * @returns {Promise<{ error: string | null; data?: { id: string } }>}
  */
 export async function createServiceAction(formData) {
+  const auth = await requirePermission("services", "create");
+  if (auth.error) return { error: auth.error };
+
   const name = formData.name?.trim();
 
   if (!name) {
@@ -50,6 +54,9 @@ export async function createServiceAction(formData) {
  * @returns {Promise<{ error: string | null }>}
  */
 export async function updateServiceAction(id, formData) {
+  const auth = await requirePermission("services", "edit");
+  if (auth.error) return { error: auth.error };
+
   if (!id) {
     return { error: "El ID del servicio es requerido." };
   }
@@ -80,6 +87,9 @@ export async function updateServiceAction(id, formData) {
  * @returns {Promise<{ error: string | null }>}
  */
 export async function deleteServiceAction(id) {
+  const auth = await requirePermission("services", "delete");
+  if (auth.error) return { error: auth.error };
+
   if (!id) {
     return { error: "El ID del servicio es requerido." };
   }
@@ -114,6 +124,9 @@ export async function deleteServiceAction(id) {
  * @returns {Promise<{ error: string | null; image_bucket?: string; image_path?: string }>}
  */
 export async function uploadServiceImageAction(serviceId, formData) {
+  const auth = await requirePermission("services", "edit");
+  if (auth.error) return { error: auth.error };
+
   if (!serviceId) {
     return { error: "El ID del servicio es requerido." };
   }
@@ -174,6 +187,9 @@ export async function uploadServiceImageAction(serviceId, formData) {
  * @returns {Promise<{ error: string | null }>}
  */
 export async function removeServiceImageAction(serviceId) {
+  const auth = await requirePermission("services", "edit");
+  if (auth.error) return { error: auth.error };
+
   if (!serviceId) {
     return { error: "El ID del servicio es requerido." };
   }

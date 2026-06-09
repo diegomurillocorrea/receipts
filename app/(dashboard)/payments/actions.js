@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { buildPaymentVoucherPdfBytes } from "@/lib/payment-voucher-pdf";
 import { revalidatePath } from "next/cache";
+import { requirePermission } from "@/lib/auth/permissions";
 import {
   PAYMENT_PROOF_BUCKET,
   PAYMENT_STATUS_PAID,
@@ -11,8 +12,6 @@ import {
   PAYMENT_VOUCHER_PREFIX,
   STATUS_LABELS,
 } from "./constants";
-
-const ALLOWED_ADMIN_EMAIL = "diegomurillocorrea@gmail.com";
 
 /**
  * @param {unknown} value
@@ -158,6 +157,9 @@ function computeCommission(totalAmount) {
  * @returns {Promise<{ error: string | null; receipts?: { id: string; account_receipt_number: string; clients: { name: string; last_name: string } | null; services: { name: string } | null }[] }>}
  */
 export async function searchReceiptsForPaymentAction(query) {
+  const auth = await requirePermission("payments", "view");
+  if (auth.error) return { error: auth.error };
+
   const q = (query ?? "").trim();
   if (q.length < SEARCH_DEBOUNCE_MIN_LENGTH) {
     return { receipts: [] };
@@ -204,6 +206,9 @@ export async function searchReceiptsForPaymentAction(query) {
  * @returns {Promise<{ error: string | null; services?: { id: string; name: string; link: string | null; image_bucket: string | null; image_path: string | null }[] }>}
  */
 export async function getServicesForConsultaAction() {
+  const auth = await requirePermission("payments", "view");
+  if (auth.error) return { error: auth.error };
+
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("services")
@@ -221,6 +226,9 @@ export async function getServicesForConsultaAction() {
  * @returns {Promise<{ error: string | null }>}
  */
 export async function createPaymentAction(payload) {
+  const auth = await requirePermission("payments", "create");
+  if (auth.error) return { error: auth.error };
+
   const receipt_id = payload.receipt_id?.trim();
   const total_amount = Number(payload.total_amount);
   const payment_method_id = payload.payment_method_id?.trim();
@@ -284,6 +292,9 @@ export async function createPaymentAction(payload) {
  * @returns {Promise<{ error: string | null }>}
  */
 export async function updatePaymentAction(id, payload) {
+  const auth = await requirePermission("payments", "edit");
+  if (auth.error) return { error: auth.error };
+
   if (!id) {
     return { error: "El ID del pago es requerido." };
   }
@@ -353,6 +364,9 @@ export async function updatePaymentAction(id, payload) {
  * @returns {Promise<{ error: string | null }>}
  */
 export async function deletePaymentAction(id) {
+  const auth = await requirePermission("payments", "delete");
+  if (auth.error) return { error: auth.error };
+
   if (!id) {
     return { error: "El ID del pago es requerido." };
   }
@@ -376,6 +390,9 @@ export async function deletePaymentAction(id) {
  * @returns {Promise<{ error: string | null; publicUrl?: string; proof_path?: string; proof_bucket?: string }>}
  */
 export async function uploadPaymentProofAction(paymentId, formData) {
+  const auth = await requirePermission("payments", "manage_proof");
+  if (auth.error) return { error: auth.error };
+
   if (!paymentId) {
     return { error: "El ID del pago es requerido." };
   }
@@ -428,6 +445,9 @@ export async function uploadPaymentProofAction(paymentId, formData) {
  * @returns {Promise<{ error: string | null }>}
  */
 export async function removePaymentProofAction(paymentId) {
+  const auth = await requirePermission("payments", "manage_proof");
+  if (auth.error) return { error: auth.error };
+
   if (!paymentId) {
     return { error: "El ID del pago es requerido." };
   }
@@ -467,6 +487,9 @@ export async function removePaymentProofAction(paymentId) {
  * @returns {Promise<{ error: string | null; url?: string }>}
  */
 export async function getPaymentProofUrlAction(paymentId) {
+  const auth = await requirePermission("payments", "manage_proof");
+  if (auth.error) return { error: auth.error };
+
   if (!paymentId) {
     return { error: "El ID del pago es requerido." };
   }
@@ -502,18 +525,14 @@ export async function getPaymentProofUrlAction(paymentId) {
  * @returns {Promise<{ error: string | null; publicUrl?: string; whatsappUrl?: string | null }>}
  */
 export async function generatePaymentVoucherPdfAction(paymentId) {
+  const auth = await requirePermission("payments", "send_voucher");
+  if (auth.error) return { error: auth.error };
+
   if (!paymentId) {
     return { error: "El ID del pago es requerido." };
   }
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user?.email || user.email !== ALLOWED_ADMIN_EMAIL) {
-    return { error: "No autorizado." };
-  }
-
   const generatedAt = new Date();
 
   const { data: payment, error: fetchError } = await supabase

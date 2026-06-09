@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
+import { usePermissions } from "../permissions-provider";
 import {
   createServiceAction,
   updateServiceAction,
@@ -32,6 +33,10 @@ export function ServicesView({ initialServices, fetchError }) {
   const router = useRouter();
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === "mobile";
+  const { can } = usePermissions();
+  const canCreate = can("services", "create");
+  const canEdit = can("services", "edit");
+  const canDelete = can("services", "delete");
   const services = initialServices;
   const [formOpen, setFormOpen] = useState(null);
   const [formName, setFormName] = useState("");
@@ -203,6 +208,7 @@ export function ServicesView({ initialServices, fetchError }) {
             eliminar servicios.
           </p>
         </div>
+        {canCreate && (
         <button
           type="button"
           onClick={openCreate}
@@ -211,6 +217,7 @@ export function ServicesView({ initialServices, fetchError }) {
         >
           Agregar servicio
         </button>
+        )}
       </header>
 
       {fetchError && (
@@ -266,6 +273,7 @@ export function ServicesView({ initialServices, fetchError }) {
               Aún no hay servicios. Agrega tu primer servicio (ej. Agua, Electricidad,
               Internet) para comenzar.
             </p>
+            {canCreate && (
             <button
               type="button"
               onClick={openCreate}
@@ -274,6 +282,7 @@ export function ServicesView({ initialServices, fetchError }) {
             >
               Agregar servicio
             </button>
+            )}
           </div>
         ) : filteredServices.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-5 px-4 py-20 text-center">
@@ -335,7 +344,9 @@ export function ServicesView({ initialServices, fetchError }) {
                     </span>
                   </div>
                 </div>
+                {(canEdit || canDelete) && (
                 <div className="flex gap-3 pt-2">
+                  {canEdit && (
                   <button
                     type="button"
                     onClick={() => openEdit(service)}
@@ -344,6 +355,8 @@ export function ServicesView({ initialServices, fetchError }) {
                   >
                     Editar
                   </button>
+                  )}
+                  {canDelete && (
                   <button
                     type="button"
                     onClick={() => handleDeleteClick(service)}
@@ -352,7 +365,9 @@ export function ServicesView({ initialServices, fetchError }) {
                   >
                     Eliminar
                   </button>
+                  )}
                 </div>
+                )}
               </li>
             ))}
           </ul>
@@ -376,9 +391,11 @@ export function ServicesView({ initialServices, fetchError }) {
                   <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
                     Creado
                   </th>
+                  {(canEdit || canDelete) && (
                   <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
                     Acciones
                   </th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -429,8 +446,10 @@ export function ServicesView({ initialServices, fetchError }) {
                     <td className="px-4 py-3.5 text-zinc-500 dark:text-zinc-500 tablet:px-6">
                       {formatDate(service.created_at)}
                     </td>
+                    {(canEdit || canDelete) && (
                     <td className="px-4 py-3.5 tablet:px-6">
                       <div className="flex gap-3">
+                        {canEdit && (
                         <button
                           type="button"
                           onClick={() => openEdit(service)}
@@ -439,6 +458,8 @@ export function ServicesView({ initialServices, fetchError }) {
                         >
                           Editar
                         </button>
+                        )}
+                        {canDelete && (
                         <button
                           type="button"
                           onClick={() => handleDeleteClick(service)}
@@ -447,8 +468,10 @@ export function ServicesView({ initialServices, fetchError }) {
                         >
                           Eliminar
                         </button>
+                        )}
                       </div>
                     </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

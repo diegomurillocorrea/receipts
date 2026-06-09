@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { requirePageView } from "@/lib/auth/page-access";
 import { PaymentMethodsView } from "./payment-methods-view";
 
 export const metadata = {
@@ -6,6 +7,7 @@ export const metadata = {
 };
 
 export default async function PaymentMethodsPage() {
+  await requirePageView("payment_methods");
   const supabase = await createClient();
   const { data: paymentMethods = [], error: paymentMethodsError } = await supabase
     .from("payment_methods")

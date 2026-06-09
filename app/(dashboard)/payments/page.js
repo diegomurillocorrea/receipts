@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { requirePageView } from "@/lib/auth/page-access";
 import { PaymentsView } from "./payments-view";
 
 export const metadata = {
@@ -6,6 +7,7 @@ export const metadata = {
 };
 
 export default async function PaymentsPage() {
+  await requirePageView("payments");
   const supabase = await createClient();
   const [paymentsResult, paymentMethodsResult] = await Promise.all([
     supabase

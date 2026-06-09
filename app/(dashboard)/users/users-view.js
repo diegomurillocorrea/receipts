@@ -1,18 +1,21 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
+import { usePermissions } from "../permissions-provider";
 import {
   createUserAction,
   updateUserAction,
   deleteUserAction,
+  getRolesForSelectAction,
 } from "./actions";
 
 const EMPTY_FORM = {
   email: "",
   full_name: "",
   password: "",
+  role_id: "",
 };
 
 function formatDate(isoString) {
@@ -38,6 +41,17 @@ export function UsersView({ initialUsers, fetchError }) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [roles, setRoles] = useState([]);
+  const { can } = usePermissions();
+  const canCreate = can("users", "create");
+  const canEdit = can("users", "edit");
+  const canDelete = can("users", "delete");
+
+  useEffect(() => {
+    getRolesForSelectAction().then((result) => {
+      if (!result.error && result.roles) setRoles(result.roles);
+    });
+  }, []);
 
   const isEditing = formOpen && formOpen !== "create";
 
@@ -63,6 +77,7 @@ export function UsersView({ initialUsers, fetchError }) {
       email: user.email ?? "",
       full_name: user.full_name ?? "",
       password: "",
+      role_id: user.role_id ?? "",
     });
     setFormError(null);
   }, []);
@@ -138,6 +153,7 @@ export function UsersView({ initialUsers, fetchError }) {
             Gestionar los usuarios del sistema (acceso e inicio de sesión).
           </p>
         </div>
+        {canCreate && (
         <button
           type="button"
           onClick={openCreate}
@@ -146,6 +162,7 @@ export function UsersView({ initialUsers, fetchError }) {
         >
           Agregar usuario
         </button>
+        )}
       </header>
 
       {fetchError && (
@@ -202,7 +219,7 @@ export function UsersView({ initialUsers, fetchError }) {
                 ? "No se pudieron cargar los usuarios."
                 : "Aún no hay usuarios. Agrega tu primer usuario para comenzar."}
             </p>
-            {!fetchError && (
+            {!fetchError && canCreate && (
               <button
                 type="button"
                 onClick={openCreate}
@@ -245,10 +262,15 @@ export function UsersView({ initialUsers, fetchError }) {
                     {user.email}
                   </span>
                   <span className="text-xs text-zinc-500 dark:text-zinc-500">
+                    Rol: {user.role_name || "Sin rol"}
+                  </span>
+                  <span className="text-xs text-zinc-500 dark:text-zinc-500">
                     {formatDate(user.created_at)}
                   </span>
                 </div>
+                {(canEdit || canDelete) && (
                 <div className="flex gap-3 pt-2">
+                  {canEdit && (
                   <button
                     type="button"
                     onClick={() => openEdit(user)}
@@ -257,6 +279,8 @@ export function UsersView({ initialUsers, fetchError }) {
                   >
                     Editar
                   </button>
+                  )}
+                  {canDelete && (
                   <button
                     type="button"
                     onClick={() => handleDeleteClick(user)}
@@ -265,7 +289,9 @@ export function UsersView({ initialUsers, fetchError }) {
                   >
                     Eliminar
                   </button>
+                  )}
                 </div>
+                )}
               </li>
             ))}
           </ul>
@@ -284,11 +310,16 @@ export function UsersView({ initialUsers, fetchError }) {
                     Correo
                   </th>
                   <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
+                    Rol
+                  </th>
+                  <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
                     Creado
                   </th>
+                  {(canEdit || canDelete) && (
                   <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
                     Acciones
                   </th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -306,11 +337,16 @@ export function UsersView({ initialUsers, fetchError }) {
                     <td className="px-4 py-3.5 text-zinc-600 dark:text-zinc-400 tablet:px-6">
                       {user.email}
                     </td>
+                    <td className="px-4 py-3.5 text-zinc-600 dark:text-zinc-400 tablet:px-6">
+                      {user.role_name || "Sin rol"}
+                    </td>
                     <td className="px-4 py-3.5 text-zinc-500 dark:text-zinc-500 tablet:px-6">
                       {formatDate(user.created_at)}
                     </td>
+                    {(canEdit || canDelete) && (
                     <td className="px-4 py-3.5 tablet:px-6">
                       <div className="flex gap-3">
+                        {canEdit && (
                         <button
                           type="button"
                           onClick={() => openEdit(user)}
@@ -319,6 +355,8 @@ export function UsersView({ initialUsers, fetchError }) {
                         >
                           Editar
                         </button>
+                        )}
+                        {canDelete && (
                         <button
                           type="button"
                           onClick={() => handleDeleteClick(user)}
@@ -327,8 +365,10 @@ export function UsersView({ initialUsers, fetchError }) {
                         >
                           Eliminar
                         </button>
+                        )}
                       </div>
                     </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -418,6 +458,31 @@ export function UsersView({ initialUsers, fetchError }) {
                     ? "Escribe una nueva contraseña solo si deseas cambiarla."
                     : "Mínimo 6 caracteres."}
                 </p>
+              </div>
+              <div>
+                <label
+                  htmlFor="user-role"
+                  className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Rol
+                </label>
+                <select
+                  id="user-role"
+                  value={formData.role_id}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, role_id: e.target.value }))
+                  }
+                  disabled={isSubmitting}
+                  className={inputClass}
+                  aria-label="Seleccionar rol del usuario"
+                >
+                  <option value="">Sin rol</option>
+                  {roles.map((role) => (
+                    <option key={role.id} value={role.id}>
+                      {role.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {formError && (
