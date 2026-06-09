@@ -200,6 +200,23 @@ export async function searchReceiptsForPaymentAction(query) {
 }
 
 /**
+ * Lista de servicios con su enlace e imagen, para el modal de "Consultas de Servicio".
+ * @returns {Promise<{ error: string | null; services?: { id: string; name: string; link: string | null; image_bucket: string | null; image_path: string | null }[] }>}
+ */
+export async function getServicesForConsultaAction() {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("services")
+    .select("id, name, link, image_bucket, image_path")
+    .order("name", { ascending: true });
+
+  if (error) {
+    return { error: error.message };
+  }
+  return { error: null, services: data ?? [] };
+}
+
+/**
  * @param {{ receipt_id: string; total_amount: number; payment_method_id: string; status?: number; created_at?: string; add_commission?: boolean; custom_commission?: number | null }} payload
  * @returns {Promise<{ error: string | null }>}
  */

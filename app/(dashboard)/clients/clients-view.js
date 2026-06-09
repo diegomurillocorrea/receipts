@@ -30,6 +30,13 @@ function formatDate(isoString) {
   });
 }
 
+function getServiceImageUrl(service) {
+  if (!service?.image_bucket || !service?.image_path) return null;
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!base) return null;
+  return `${base}/storage/v1/object/public/${service.image_bucket}/${service.image_path}`;
+}
+
 export function ClientsView({ initialClients, fetchError }) {
   const router = useRouter();
   const breakpoint = useBreakpoint();
@@ -155,6 +162,14 @@ export function ClientsView({ initialClients, fetchError }) {
     const map = {};
     servicesList.forEach((s) => {
       map[s.id] = s.name;
+    });
+    return map;
+  }, [servicesList]);
+
+  const serviceImageUrlById = useMemo(() => {
+    const map = {};
+    servicesList.forEach((s) => {
+      map[s.id] = getServiceImageUrl(s);
     });
     return map;
   }, [servicesList]);
@@ -705,13 +720,31 @@ export function ClientsView({ initialClients, fetchError }) {
                               key={item.id}
                               className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200/80 bg-zinc-50/50 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-800/50"
                             >
-                              <div className="flex min-w-0 flex-col">
-                                <span className="truncate font-medium text-zinc-900 dark:text-zinc-50">
-                                  {serviceNameById[item.serviceId] ?? "Servicio"}
-                                </span>
-                                <span className="truncate text-xs text-zinc-600 dark:text-zinc-400">
-                                  {item.accountNumber}
-                                </span>
+                              <div className="flex min-w-0 items-center gap-3">
+                                {serviceImageUrlById[item.serviceId] ? (
+                                  <img
+                                    src={serviceImageUrlById[item.serviceId]}
+                                    alt={`Imagen de ${serviceNameById[item.serviceId] ?? "servicio"}`}
+                                    className="h-10 w-10 shrink-0 rounded-lg border border-zinc-200 object-cover dark:border-zinc-700"
+                                  />
+                                ) : (
+                                  <div
+                                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-dashed border-zinc-300 text-zinc-400 dark:border-zinc-700 dark:text-zinc-600"
+                                    aria-hidden
+                                  >
+                                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                    </svg>
+                                  </div>
+                                )}
+                                <div className="flex min-w-0 flex-col">
+                                  <span className="truncate font-medium text-zinc-900 dark:text-zinc-50">
+                                    {serviceNameById[item.serviceId] ?? "Servicio"}
+                                  </span>
+                                  <span className="truncate text-xs text-zinc-600 dark:text-zinc-400">
+                                    {item.accountNumber}
+                                  </span>
+                                </div>
                               </div>
                               <button
                                 type="button"

@@ -49,6 +49,7 @@ const NAV_ITEMS = [
   { href: "/clients", label: "Clientes" },
   { href: "/services", label: "Servicios" },
   { href: "/payment-methods", label: "Métodos de pago" },
+  { href: "/users", label: "Usuarios" },
 ];
 
 function NavContent({ pathname, onNavClick, hideLogo, hideThemeToggle }) {

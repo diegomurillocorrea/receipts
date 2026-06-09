@@ -184,7 +184,7 @@ export async function getServicesListAction() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("services")
-    .select("id, name")
+    .select("id, name, image_bucket, image_path")
     .order("name", { ascending: true });
 
   if (error) {

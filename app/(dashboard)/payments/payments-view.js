@@ -14,6 +14,7 @@ import {
   removePaymentProofAction,
   getPaymentProofUrlAction,
   generatePaymentVoucherPdfAction,
+  getServicesForConsultaAction,
 } from "./actions";
 import {
   PAYMENT_STATUS_PENDING,
@@ -114,6 +115,46 @@ function getPaymentReceiptDisplay(payment) {
   return getReceiptLabel(receipt);
 }
 
+function getPaymentServiceImageUrl(payment) {
+  const receipt = normalizeReceiptRef(payment.receipt ?? payment.receipts);
+  if (!receipt) return null;
+  const service = receipt.services ?? receipt.service;
+  const svc = Array.isArray(service) ? service[0] : service;
+  if (!svc?.image_bucket || !svc?.image_path) return null;
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!base) return null;
+  return `${base}/storage/v1/object/public/${svc.image_bucket}/${svc.image_path}`;
+}
+
+function getServiceImageUrlDirect(service) {
+  if (!service?.image_bucket || !service?.image_path) return null;
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!base) return null;
+  return `${base}/storage/v1/object/public/${service.image_bucket}/${service.image_path}`;
+}
+
+function ServiceImageThumb({ url, size = "h-9 w-9" }) {
+  if (url) {
+    return (
+      <img
+        src={url}
+        alt="Imagen del servicio"
+        className={`${size} shrink-0 rounded-lg border border-zinc-200 object-cover dark:border-zinc-700`}
+      />
+    );
+  }
+  return (
+    <div
+      className={`${size} flex shrink-0 items-center justify-center rounded-lg border border-dashed border-zinc-300 text-zinc-400 dark:border-zinc-700 dark:text-zinc-600`}
+      aria-hidden
+    >
+      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      </svg>
+    </div>
+  );
+}
+
 function getPaymentMethodName(payment) {
   const method = payment.payment_methods;
   return method?.name ?? "—";
@@ -197,6 +238,10 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
 });
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
   const [userEmail, setUserEmail] = useState(null);
+  const [consultaOpen, setConsultaOpen] = useState(false);
+  const [consultaServices, setConsultaServices] = useState([]);
+  const [consultaLoading, setConsultaLoading] = useState(false);
+  const [consultaError, setConsultaError] = useState(null);
   const searchTimeoutRef = useRef(null);
   const comboboxRef = useRef(null);
   const filterDropdownRef = useRef(null);
@@ -614,18 +659,49 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
     router.refresh();
   };
 
+  const handleOpenConsulta = useCallback(async () => {
+    setConsultaOpen(true);
+    setConsultaError(null);
+    setConsultaLoading(true);
+    const result = await getServicesForConsultaAction();
+    setConsultaLoading(false);
+    if (result.error) {
+      setConsultaError(result.error);
+      return;
+    }
+    setConsultaServices(result.services ?? []);
+  }, []);
+
+  const handleCloseConsulta = useCallback(() => {
+    setConsultaOpen(false);
+    setConsultaError(null);
+  }, []);
+
   const inputClass =
     "w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-zinc-900 placeholder-zinc-400 transition-all duration-200 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-500 dark:focus:border-emerald-400 dark:focus:ring-emerald-500/30";
 
   return (
     <div className="space-y-6 tablet:space-y-8">
-      <header>
-        <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 tablet:text-3xl">
-          Pagos
-        </h1>
-        <p className="mt-1.5 text-sm text-zinc-600 dark:text-zinc-400 tablet:text-base">
-          Registrar pagos para cuentas de servicio de clientes (recibos).
-        </p>
+      <header className="flex flex-row items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 tablet:text-3xl">
+            Pagos
+          </h1>
+          <p className="mt-1.5 text-sm text-zinc-600 dark:text-zinc-400 tablet:text-base">
+            Registrar pagos para cuentas de servicio de clientes (recibos).
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleOpenConsulta}
+          className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-emerald-600 bg-white px-3 text-xs font-medium text-emerald-700 transition-all duration-200 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:border-emerald-500 dark:bg-zinc-900 dark:text-emerald-400 dark:hover:bg-emerald-950/40 dark:focus:ring-offset-zinc-900"
+          aria-label="Consultas de servicio"
+        >
+          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          Consultas de Servicio
+        </button>
       </header>
 
       {fetchError && (
@@ -1158,8 +1234,9 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                     <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400" aria-hidden>
                       {index + 1}.
                     </span>
-                    <span className="text-zinc-900 dark:text-zinc-50">
-                      {getPaymentReceiptDisplay(payment)}
+                    <span className="flex items-center gap-2 text-zinc-900 dark:text-zinc-50">
+                      <ServiceImageThumb url={getPaymentServiceImageUrl(payment)} size="h-8 w-8" />
+                      <span className="min-w-0">{getPaymentReceiptDisplay(payment)}</span>
                     </span>
                     <span className="font-medium text-zinc-900 dark:text-zinc-50">
                       {formatAmount(payment.total_amount)}
@@ -1311,15 +1388,18 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                       <td className="w-12 px-2 py-3.5 text-center text-zinc-500 dark:text-zinc-400 tablet:px-4" aria-label={`Fila ${index + 1}`}>
                         {index + 1}
                       </td>
-                      <td className="max-w-[300px] min-w-0 px-4 py-3.5 text-center text-zinc-900 dark:text-zinc-50 tablet:px-6">
-                        <div
-                          className="max-w-full overflow-x-auto overflow-y-hidden text-left"
-                          style={{ scrollbarGutter: "stable" }}
-                          title={getPaymentReceiptDisplay(payment)}
-                        >
-                          <span className="inline-block whitespace-nowrap">
-                            {getPaymentReceiptDisplay(payment)}
-                          </span>
+                      <td className="max-w-[320px] min-w-0 px-4 py-3.5 text-center text-zinc-900 dark:text-zinc-50 tablet:px-6">
+                        <div className="flex items-center gap-2.5">
+                          <ServiceImageThumb url={getPaymentServiceImageUrl(payment)} />
+                          <div
+                            className="min-w-0 max-w-full flex-1 overflow-x-auto overflow-y-hidden text-left"
+                            style={{ scrollbarGutter: "stable" }}
+                            title={getPaymentReceiptDisplay(payment)}
+                          >
+                            <span className="inline-block whitespace-nowrap">
+                              {getPaymentReceiptDisplay(payment)}
+                            </span>
+                          </div>
                         </div>
                       </td>
                       <td className="px-4 py-3.5 text-center font-medium text-zinc-900 dark:text-zinc-50 tablet:px-6">
@@ -1704,6 +1784,93 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
               >
                 Entendido
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Consultas de Servicio modal */}
+      {consultaOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm tablet:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="consulta-title"
+        >
+          <div className="flex max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200/80 px-5 py-4 dark:border-zinc-800">
+              <h2 id="consulta-title" className="truncate text-lg font-bold text-zinc-900 dark:text-zinc-50">
+                Consultas de Servicio
+              </h2>
+              <button
+                type="button"
+                onClick={handleCloseConsulta}
+                className="rounded-full p-1.5 text-zinc-400 transition-colors hover:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:hover:text-zinc-200"
+                aria-label="Cerrar"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-5">
+              {consultaLoading ? (
+                <p className="py-10 text-center text-sm text-zinc-500 dark:text-zinc-400" aria-live="polite">
+                  Cargando servicios…
+                </p>
+              ) : consultaError ? (
+                <p className="py-10 text-center text-sm text-red-600 dark:text-red-400" role="alert">
+                  {consultaError}
+                </p>
+              ) : consultaServices.length === 0 ? (
+                <p className="py-10 text-center text-sm text-zinc-500 dark:text-zinc-400">
+                  No hay servicios definidos.
+                </p>
+              ) : (
+                <ul className="grid grid-cols-2 gap-3 tablet:grid-cols-3 desktop:grid-cols-4" role="list">
+                  {consultaServices.map((service) => {
+                    const url = getServiceImageUrlDirect(service);
+                    const hasLink = Boolean(service.link && service.link.trim());
+                    const cardContent = (
+                      <>
+                        <ServiceImageThumb url={url} size="h-16 w-16" />
+                        <span className="line-clamp-2 text-center text-sm font-medium">
+                          {service.name}
+                        </span>
+                        {!hasLink && (
+                          <span className="text-[11px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-600">
+                            Consultar a Diego
+                          </span>
+                        )}
+                      </>
+                    );
+                    return (
+                      <li key={service.id}>
+                        {hasLink ? (
+                          <a
+                            href={service.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex h-full w-full flex-col items-center gap-2.5 rounded-xl border border-zinc-200 bg-white p-4 text-zinc-900 shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-400 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-50 dark:hover:border-emerald-500 dark:focus:ring-offset-zinc-900"
+                            aria-label={`Abrir consulta de ${service.name} en una nueva pestaña`}
+                          >
+                            {cardContent}
+                          </a>
+                        ) : (
+                          <div
+                            className="flex h-full w-full cursor-not-allowed flex-col items-center gap-2.5 rounded-xl border border-dashed border-zinc-200 bg-zinc-50/60 p-4 text-zinc-400 opacity-70 dark:border-zinc-700 dark:bg-zinc-800/30 dark:text-zinc-500"
+                            aria-disabled="true"
+                            title="Este servicio no tiene enlace de consulta"
+                          >
+                            {cardContent}
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
           </div>
         </div>

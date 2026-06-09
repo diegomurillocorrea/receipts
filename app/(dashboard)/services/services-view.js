@@ -1,12 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
 import {
   createServiceAction,
   updateServiceAction,
   deleteServiceAction,
+  uploadServiceImageAction,
+  removeServiceImageAction,
 } from "./actions";
 
 function formatDate(isoString) {
@@ -19,6 +21,13 @@ function formatDate(isoString) {
   });
 }
 
+function getServiceImageUrl(service) {
+  if (!service?.image_bucket || !service?.image_path) return null;
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!base) return null;
+  return `${base}/storage/v1/object/public/${service.image_bucket}/${service.image_path}`;
+}
+
 export function ServicesView({ initialServices, fetchError }) {
   const router = useRouter();
   const breakpoint = useBreakpoint();
@@ -26,12 +35,27 @@ export function ServicesView({ initialServices, fetchError }) {
   const services = initialServices;
   const [formOpen, setFormOpen] = useState(null);
   const [formName, setFormName] = useState("");
+  const [formLink, setFormLink] = useState("");
   const [formError, setFormError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isRemovingImage, setIsRemovingImage] = useState(false);
+  const [imageError, setImageError] = useState(null);
+  const [formImageFile, setFormImageFile] = useState(null);
+  const imageFileInputRef = useRef(null);
+
+  const formImagePreview = useMemo(() => {
+    if (!formImageFile) return null;
+    return URL.createObjectURL(formImageFile);
+  }, [formImageFile]);
+
+  useEffect(() => {
+    if (!formImagePreview) return;
+    return () => URL.revokeObjectURL(formImagePreview);
+  }, [formImagePreview]);
 
   const isEditing = formOpen && formOpen !== "create";
 
@@ -46,19 +70,29 @@ export function ServicesView({ initialServices, fetchError }) {
   const openCreate = useCallback(() => {
     setFormOpen("create");
     setFormName("");
+    setFormLink("");
     setFormError(null);
+    setImageError(null);
+    setFormImageFile(null);
   }, []);
 
   const openEdit = useCallback((service) => {
     setFormOpen(service);
     setFormName(service.name ?? "");
+    setFormLink(service.link ?? "");
     setFormError(null);
+    setImageError(null);
+    setFormImageFile(null);
   }, []);
 
   const closeForm = useCallback(() => {
     setFormOpen(null);
     setFormName("");
+    setFormLink("");
     setFormError(null);
+    setImageError(null);
+    setFormImageFile(null);
+    if (imageFileInputRef.current) imageFileInputRef.current.value = "";
   }, []);
 
   const handleFormSubmit = async (e) => {
@@ -66,25 +100,67 @@ export function ServicesView({ initialServices, fetchError }) {
     setFormError(null);
     setIsSubmitting(true);
 
+    let targetId = isEditing ? formOpen.id : null;
+
     if (isEditing) {
-      const result = await updateServiceAction(formOpen.id, { name: formName });
-      setIsSubmitting(false);
+      const result = await updateServiceAction(formOpen.id, {
+        name: formName,
+        link: formLink,
+      });
       if (result.error) {
+        setIsSubmitting(false);
         setFormError(result.error);
         return;
       }
-      closeForm();
-      router.refresh();
-      return;
+    } else {
+      const result = await createServiceAction({ name: formName, link: formLink });
+      if (result.error) {
+        setIsSubmitting(false);
+        setFormError(result.error);
+        return;
+      }
+      targetId = result.data?.id ?? null;
     }
 
-    const result = await createServiceAction({ name: formName });
+    if (formImageFile && targetId) {
+      const imageData = new FormData();
+      imageData.set("image", formImageFile);
+      const uploadResult = await uploadServiceImageAction(targetId, imageData);
+      if (uploadResult.error) {
+        setIsSubmitting(false);
+        setFormError(`Servicio guardado, pero la imagen falló: ${uploadResult.error}`);
+        router.refresh();
+        return;
+      }
+    }
+
     setIsSubmitting(false);
+    closeForm();
+    router.refresh();
+  };
+
+  const handleImageFileChange = (e) => {
+    const file = e.target.files?.[0] ?? null;
+    setImageError(null);
+    setFormImageFile(file);
+  };
+
+  const handleImageRemove = async () => {
+    if (!isEditing) return;
+    setIsRemovingImage(true);
+    setImageError(null);
+    const result = await removeServiceImageAction(formOpen.id);
+    setIsRemovingImage(false);
     if (result.error) {
-      setFormError(result.error);
+      setImageError(result.error);
       return;
     }
-    closeForm();
+    setFormOpen((prev) =>
+      prev && prev !== "create"
+        ? { ...prev, image_bucket: null, image_path: null }
+        : prev
+    );
+    if (imageFileInputRef.current) imageFileInputRef.current.value = "";
     router.refresh();
   };
 
@@ -220,16 +296,44 @@ export function ServicesView({ initialServices, fetchError }) {
                 key={service.id}
                 className="flex flex-col gap-2 py-4 first:pt-4 last:pb-4"
               >
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400" aria-hidden>
-                    {index + 1}.
-                  </span>
-                  <span className="font-semibold text-zinc-900 dark:text-zinc-50">
-                    {service.name}
-                  </span>
-                  <span className="text-xs text-zinc-500 dark:text-zinc-500">
-                    {formatDate(service.created_at)}
-                  </span>
+                <div className="flex items-start gap-3">
+                  {getServiceImageUrl(service) ? (
+                    <img
+                      src={getServiceImageUrl(service)}
+                      alt={`Imagen de ${service.name}`}
+                      className="h-12 w-12 shrink-0 rounded-lg border border-zinc-200 object-cover dark:border-zinc-700"
+                    />
+                  ) : (
+                    <div
+                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-dashed border-zinc-300 text-zinc-400 dark:border-zinc-700 dark:text-zinc-600"
+                      aria-hidden
+                    >
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                  )}
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400" aria-hidden>
+                      {index + 1}.
+                    </span>
+                    <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+                      {service.name}
+                    </span>
+                    {service.link && (
+                      <a
+                        href={service.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="truncate text-xs font-medium text-emerald-600 underline-offset-2 hover:underline dark:text-emerald-400"
+                      >
+                        {service.link}
+                      </a>
+                    )}
+                    <span className="text-xs text-zinc-500 dark:text-zinc-500">
+                      {formatDate(service.created_at)}
+                    </span>
+                  </div>
                 </div>
                 <div className="flex gap-3 pt-2">
                   <button
@@ -261,7 +365,13 @@ export function ServicesView({ initialServices, fetchError }) {
                     #
                   </th>
                   <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
+                    Imagen
+                  </th>
+                  <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
                     Nombre
+                  </th>
+                  <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
+                    Link
                   </th>
                   <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
                     Creado
@@ -280,8 +390,41 @@ export function ServicesView({ initialServices, fetchError }) {
                     <td className="w-12 px-2 py-3.5 text-zinc-500 dark:text-zinc-400 tablet:px-4" aria-label={`Fila ${index + 1}`}>
                       {index + 1}
                     </td>
+                    <td className="px-4 py-3.5 tablet:px-6">
+                      {getServiceImageUrl(service) ? (
+                        <img
+                          src={getServiceImageUrl(service)}
+                          alt={`Imagen de ${service.name}`}
+                          className="h-10 w-10 rounded-lg border border-zinc-200 object-cover dark:border-zinc-700"
+                        />
+                      ) : (
+                        <div
+                          className="flex h-10 w-10 items-center justify-center rounded-lg border border-dashed border-zinc-300 text-zinc-400 dark:border-zinc-700 dark:text-zinc-600"
+                          aria-label="Sin imagen"
+                        >
+                          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-3.5 font-medium text-zinc-900 dark:text-zinc-50 tablet:px-6">
                       {service.name}
+                    </td>
+                    <td className="max-w-[16rem] px-4 py-3.5 tablet:px-6">
+                      {service.link ? (
+                        <a
+                          href={service.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block truncate font-medium text-emerald-600 underline-offset-2 hover:underline dark:text-emerald-400"
+                          title={service.link}
+                        >
+                          {service.link}
+                        </a>
+                      ) : (
+                        <span className="text-zinc-400 dark:text-zinc-600">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3.5 text-zinc-500 dark:text-zinc-500 tablet:px-6">
                       {formatDate(service.created_at)}
@@ -323,7 +466,7 @@ export function ServicesView({ initialServices, fetchError }) {
           aria-labelledby="service-form-title"
         >
           <div
-            className="w-full max-w-md rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 tablet:p-8"
+            className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-900 tablet:p-8"
             onKeyDown={(e) => e.key === "Escape" && closeForm()}
           >
             <h2
@@ -353,6 +496,83 @@ export function ServicesView({ initialServices, fetchError }) {
                   className={inputClass}
                   aria-invalid={!!formError}
                 />
+              </div>
+              <div>
+                <label
+                  htmlFor="service-link"
+                  className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Link
+                </label>
+                <input
+                  id="service-link"
+                  type="url"
+                  inputMode="url"
+                  placeholder="https://ejemplo.com"
+                  value={formLink}
+                  onChange={(e) => setFormLink(e.target.value)}
+                  disabled={isSubmitting}
+                  className={inputClass}
+                />
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  Enlace opcional relacionado al servicio.
+                </p>
+              </div>
+              <div>
+                <span className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Imagen
+                </span>
+                <div className="flex items-center gap-4">
+                  {formImagePreview || getServiceImageUrl(formOpen) ? (
+                    <img
+                      src={formImagePreview ?? getServiceImageUrl(formOpen)}
+                      alt={`Imagen de ${formName || "servicio"}`}
+                      className="h-20 w-20 rounded-xl border border-zinc-200 object-cover dark:border-zinc-700"
+                    />
+                  ) : (
+                    <div
+                      className="flex h-20 w-20 items-center justify-center rounded-xl border border-dashed border-zinc-300 text-zinc-400 dark:border-zinc-700 dark:text-zinc-600"
+                      aria-label="Sin imagen"
+                    >
+                      <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                  )}
+                  {isEditing && getServiceImageUrl(formOpen) && !formImageFile && (
+                    <button
+                      type="button"
+                      onClick={handleImageRemove}
+                      disabled={isRemovingImage || isSubmitting}
+                      className="text-sm font-medium text-red-600 underline-offset-2 hover:underline disabled:opacity-50 dark:text-red-400"
+                      aria-label="Quitar imagen"
+                    >
+                      {isRemovingImage ? "Quitando…" : "Quitar imagen"}
+                    </button>
+                  )}
+                </div>
+                <input
+                  ref={imageFileInputRef}
+                  id="service-image"
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  onChange={handleImageFileChange}
+                  disabled={isSubmitting || isRemovingImage}
+                  className="mt-3 w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-emerald-700 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50 dark:file:bg-emerald-900/30 dark:file:text-emerald-300"
+                  aria-describedby="service-image-hint"
+                />
+                <p id="service-image-hint" className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  JPG, PNG, GIF o WebP. Máximo 5 MB. Se guarda al pulsar{" "}
+                  {isEditing ? "Guardar" : "Crear"}.
+                </p>
+                {imageError && (
+                  <div
+                    role="alert"
+                    className="mt-2 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-300"
+                  >
+                    {imageError}
+                  </div>
+                )}
               </div>
               {formError && (
                 <div
