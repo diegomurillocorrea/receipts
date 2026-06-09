@@ -100,6 +100,44 @@ const SEARCH_DEBOUNCE_MIN_LENGTH = 2;
 const SEARCH_RECEIPTS_LIMIT = 25;
 
 /**
+ * @param {string} query
+ * @returns {string[]}
+ */
+function splitSearchTerms(query) {
+  return query
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+/**
+ * Client IDs where each search term matches name or last_name (e.g. "Juan Pérez").
+ * @param {import("@supabase/supabase-js").SupabaseClient} supabase
+ * @param {string} query
+ * @returns {Promise<{ error: string | null; ids: string[] }>}
+ */
+async function findClientIdsByNameQuery(supabase, query) {
+  const terms = splitSearchTerms(query);
+  if (terms.length === 0) {
+    return { error: null, ids: [] };
+  }
+
+  let clientQuery = supabase.from("clients").select("id").limit(50);
+
+  for (const term of terms) {
+    const pattern = `%${term}%`;
+    clientQuery = clientQuery.or(`name.ilike.${pattern},last_name.ilike.${pattern}`);
+  }
+
+  const { data, error } = await clientQuery;
+  if (error) {
+    return { error: error.message, ids: [] };
+  }
+
+  return { error: null, ids: (data ?? []).map((c) => c.id) };
+}
+
+/**
  * Commission by total_amount: $0.50 → $0.25; $1 → $0.50; >$1 and <$50 → $1; >=$50 and <$100 → $2; etc.
  * @param {number} totalAmount
  * @returns {number}
@@ -129,15 +167,15 @@ export async function searchReceiptsForPaymentAction(query) {
   const pattern = `%${q}%`;
 
   const [clientsRes, servicesRes] = await Promise.all([
-    supabase
-      .from("clients")
-      .select("id")
-      .or(`name.ilike.${pattern},last_name.ilike.${pattern}`)
-      .limit(50),
+    findClientIdsByNameQuery(supabase, q),
     supabase.from("services").select("id").ilike("name", pattern).limit(20),
   ]);
 
-  const clientIds = (clientsRes.data ?? []).map((c) => c.id);
+  if (clientsRes.error) {
+    return { error: clientsRes.error };
+  }
+
+  const clientIds = clientsRes.ids;
   const serviceIds = (servicesRes.data ?? []).map((s) => s.id);
 
   const receiptConditions = [`account_receipt_number.ilike.${pattern}`];

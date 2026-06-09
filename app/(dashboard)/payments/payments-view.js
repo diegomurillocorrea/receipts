@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Pencil, Trash2, Send, Eye, FileText, Upload } from "lucide-react";
+import { Pencil, Trash2, Send, Eye, FileText, Upload, Info } from "lucide-react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -33,6 +33,15 @@ function getProofPublicUrl(payment) {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!base) return null;
   return `${base}/storage/v1/object/public/${payment.proof_bucket}/${payment.proof_path}`;
+}
+
+/** Id del método "efectivo" para usarlo como valor por defecto del formulario */
+function getDefaultPaymentMethodId(methods) {
+  const list = methods ?? [];
+  const efectivo = list.find(
+    (m) => (m?.name ?? "").trim().toLowerCase() === "efectivo"
+  );
+  return efectivo?.id ?? "";
 }
 
 const MONTHS_ES = [
@@ -152,7 +161,9 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
   const [searchLoading, setSearchLoading] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState(null);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("");
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(() =>
+    getDefaultPaymentMethodId(initialPaymentMethods)
+  );
   const [selectedStatus, setSelectedStatus] = useState(PAYMENT_STATUS_PENDING);
   const [includeCommission, setIncludeCommission] = useState(true);
   const [customCommission, setCustomCommission] = useState("");
@@ -178,6 +189,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
+  const [commissionInfoOpen, setCommissionInfoOpen] = useState(false);
   const [dateFilter, setDateFilter] = useState("daily");
   const [selectedDate, setSelectedDate] = useState(() => {
   const d = new Date();
@@ -286,14 +298,14 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
     setEditingPayment(null);
     setSelectedReceipt(null);
     setAmount("");
-    setSelectedPaymentMethod("");
+    setSelectedPaymentMethod(getDefaultPaymentMethodId(initialPaymentMethods));
     setSelectedStatus(PAYMENT_STATUS_PENDING);
     setIncludeCommission(true);
     setCustomCommission("");
     const d = new Date();
     setCreatedAt(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
     setFormError(null);
-  }, []);
+  }, [initialPaymentMethods]);
 
   const handleDeleteClick = useCallback((payment) => {
     setDeleteTarget(payment);
@@ -593,7 +605,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
     setEditingPayment(null);
     setSelectedReceipt(null);
     setAmount("");
-    setSelectedPaymentMethod("");
+    setSelectedPaymentMethod(getDefaultPaymentMethodId(initialPaymentMethods));
     setSelectedStatus(PAYMENT_STATUS_PENDING);
     setIncludeCommission(true);
     setCustomCommission("");
@@ -952,12 +964,22 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
           )}
           <div className="w-full">
             <div className="mb-1 flex items-center justify-between gap-2">
-              <label
-                htmlFor="payment-custom-commission"
-                className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-              >
-                Comisión personalizada
-              </label>
+              <div className="flex items-center gap-1.5">
+                <label
+                  htmlFor="payment-custom-commission"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Comisión personalizada
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setCommissionInfoOpen(true)}
+                  className="inline-flex items-center justify-center rounded-full text-zinc-400 transition-colors hover:text-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 dark:hover:text-emerald-400 dark:focus:ring-emerald-400 dark:focus:ring-offset-zinc-900"
+                  aria-label="Ver tabla de comisiones"
+                >
+                  <Info className="h-4 w-4" aria-hidden />
+                </button>
+              </div>
               <div className="flex items-center gap-1.5">
                 <span
                   id="add-commission-label"
@@ -1596,6 +1618,91 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                 aria-label="Eliminar pago"
               >
                 {isDeleting ? "Eliminando…" : "Eliminar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Commission table info modal */}
+      {commissionInfoOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="commission-info-title"
+        >
+          <button
+            type="button"
+            onClick={() => setCommissionInfoOpen(false)}
+            className="absolute inset-0 -z-10"
+            aria-label="Cerrar overlay"
+          />
+          <div className="w-full max-w-md rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="flex items-start justify-between gap-3">
+              <h2
+                id="commission-info-title"
+                className="text-xl font-bold text-zinc-900 dark:text-zinc-50"
+              >
+                Tabla de comisiones
+              </h2>
+              <button
+                type="button"
+                onClick={() => setCommissionInfoOpen(false)}
+                className="rounded-full p-1 text-zinc-400 transition-colors hover:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:hover:text-zinc-200"
+                aria-label="Cerrar"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+              La comisión se calcula automáticamente según el monto del servicio.
+            </p>
+            <div className="mt-4 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-700">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-zinc-50 text-left text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                    <th className="px-4 py-2.5 font-medium">Monto del servicio</th>
+                    <th className="px-4 py-2.5 text-right font-medium">Comisión</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
+                  <tr className="text-zinc-800 dark:text-zinc-200">
+                    <td className="px-4 py-2.5">Menos de $0.50</td>
+                    <td className="px-4 py-2.5 text-right font-medium">$0.25</td>
+                  </tr>
+                  <tr className="text-zinc-800 dark:text-zinc-200">
+                    <td className="px-4 py-2.5">Menos de $1</td>
+                    <td className="px-4 py-2.5 text-right font-medium">$0.50</td>
+                  </tr>
+                  <tr className="text-zinc-800 dark:text-zinc-200">
+                    <td className="px-4 py-2.5">Entre $1 y $50</td>
+                    <td className="px-4 py-2.5 text-right font-medium">$1</td>
+                  </tr>
+                  <tr className="text-zinc-800 dark:text-zinc-200">
+                    <td className="px-4 py-2.5">$50</td>
+                    <td className="px-4 py-2.5 text-right font-medium">$2</td>
+                  </tr>
+                  <tr className="text-zinc-800 dark:text-zinc-200">
+                    <td className="px-4 py-2.5">$100</td>
+                    <td className="px-4 py-2.5 text-right font-medium">$3</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+              A partir de $1, la comisión aumenta $1 por cada $50 adicionales del monto.
+            </p>
+            <div className="mt-6">
+              <button
+                type="button"
+                onClick={() => setCommissionInfoOpen(false)}
+                className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-medium text-white transition-all hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:bg-emerald-500 dark:hover:bg-emerald-600 dark:focus:ring-offset-zinc-900"
+                aria-label="Entendido"
+              >
+                Entendido
               </button>
             </div>
           </div>

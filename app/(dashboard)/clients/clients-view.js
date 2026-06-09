@@ -42,16 +42,21 @@ export function ClientsView({ initialClients, fetchError }) {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
+  const [duplicateClient, setDuplicateClient] = useState(null);
 
   const [servicesList, setServicesList] = useState([]);
   const [clientReceipts, setClientReceipts] = useState([]);
   const [servicesLoading, setServicesLoading] = useState(false);
-  const [linkForm, setLinkForm] = useState({ serviceId: null, accountNumber: "" });
   const [linkError, setLinkError] = useState(null);
   const [isLinking, setIsLinking] = useState(false);
   const [unlinkingReceiptId, setUnlinkingReceiptId] = useState(null);
   const [pendingServices, setPendingServices] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
+
+  const [adderOpen, setAdderOpen] = useState(false);
+  const [adderStep, setAdderStep] = useState("select");
+  const [adderServiceId, setAdderServiceId] = useState("");
+  const [adderValue, setAdderValue] = useState("");
 
   const isEditing = formOpen && formOpen !== "create";
 
@@ -109,12 +114,21 @@ export function ClientsView({ initialClients, fetchError }) {
     };
   }, [isEditing, formOpen?.id, formOpen]);
 
+  const resetAdder = useCallback(() => {
+    setAdderOpen(false);
+    setAdderStep("select");
+    setAdderServiceId("");
+    setAdderValue("");
+    setLinkError(null);
+  }, []);
+
   const openCreate = useCallback(() => {
     setFormOpen("create");
     setFormData(EMPTY_FORM);
     setFormError(null);
     setPendingServices([]);
-  }, []);
+    resetAdder();
+  }, [resetAdder]);
 
   const openEdit = useCallback((client) => {
     setFormOpen(client);
@@ -125,81 +139,96 @@ export function ClientsView({ initialClients, fetchError }) {
       reference: client.reference ?? "",
     });
     setFormError(null);
-  }, []);
+    resetAdder();
+  }, [resetAdder]);
 
   const closeForm = useCallback(() => {
     setFormOpen(null);
     setFormData(EMPTY_FORM);
     setFormError(null);
-    setLinkForm({ serviceId: null, accountNumber: "" });
     setLinkError(null);
     setPendingServices([]);
-  }, []);
+    resetAdder();
+  }, [resetAdder]);
 
-  const getReceiptsForService = useCallback(
-    (serviceId) =>
-      clientReceipts.filter((r) => r.service_id === serviceId),
-    [clientReceipts]
-  );
+  const serviceNameById = useMemo(() => {
+    const map = {};
+    servicesList.forEach((s) => {
+      map[s.id] = s.name;
+    });
+    return map;
+  }, [servicesList]);
 
-  const getPendingServicesForService = useCallback(
-    (serviceId) =>
-      pendingServices.filter((s) => s.service_id === serviceId),
-    [pendingServices]
-  );
+  const addedServices = useMemo(() => {
+    if (isEditing) {
+      return clientReceipts.map((r) => ({
+        id: r.id,
+        serviceId: r.service_id,
+        accountNumber: r.account_receipt_number,
+      }));
+    }
+    return pendingServices.map((s) => ({
+      id: s.id,
+      serviceId: s.service_id,
+      accountNumber: s.account_receipt_number,
+    }));
+  }, [isEditing, clientReceipts, pendingServices]);
 
-  const handleAddPendingService = (e, serviceId) => {
-    e.preventDefault();
-    const accountNumber =
-      serviceId === linkForm.serviceId
-        ? linkForm.accountNumber?.trim()
-        : "";
-    if (!serviceId || !accountNumber) {
+  const handleOpenAdder = () => {
+    setAdderOpen(true);
+    setAdderStep("select");
+    setAdderServiceId(servicesList[0]?.id ?? "");
+    setAdderValue("");
+    setLinkError(null);
+  };
+
+  const handleAdderAccept = () => {
+    if (!adderServiceId) {
+      setLinkError("Selecciona un servicio.");
+      return;
+    }
+    setLinkError(null);
+    setAdderStep("input");
+  };
+
+  const handleAdderSave = async () => {
+    const value = adderValue.trim();
+    if (!adderServiceId || !value) {
       setLinkError("El número de cuenta/recibo es requerido.");
       return;
     }
     setLinkError(null);
-    setPendingServices((prev) => [
-      ...prev,
-      {
-        id: `temp-${Date.now()}-${Math.random()}`,
-        service_id: serviceId,
-        account_receipt_number: accountNumber,
-      },
-    ]);
-    setLinkForm({ serviceId: null, accountNumber: "" });
+
+    if (isEditing) {
+      setIsLinking(true);
+      const result = await createReceiptAction({
+        client_id: formOpen.id,
+        service_id: adderServiceId,
+        account_receipt_number: value,
+      });
+      setIsLinking(false);
+      if (result.error) {
+        setLinkError(result.error);
+        return;
+      }
+      const receiptsRes = await getClientReceiptsAction(formOpen.id);
+      if (!receiptsRes.error) setClientReceipts(receiptsRes.receipts ?? []);
+      router.refresh();
+    } else {
+      setPendingServices((prev) => [
+        ...prev,
+        {
+          id: `temp-${Date.now()}-${Math.random()}`,
+          service_id: adderServiceId,
+          account_receipt_number: value,
+        },
+      ]);
+    }
+    resetAdder();
   };
 
   const handleRemovePendingService = (tempId) => {
     setPendingServices((prev) => prev.filter((s) => s.id !== tempId));
-  };
-
-  const handleLinkService = async (e, serviceId) => {
-    e.preventDefault();
-    const accountNumber =
-      serviceId === linkForm.serviceId
-        ? linkForm.accountNumber?.trim()
-        : "";
-    if (!isEditing || !serviceId || !accountNumber) {
-      setLinkError("El número de cuenta/recibo es requerido.");
-      return;
-    }
-    setLinkError(null);
-    setIsLinking(true);
-    const result = await createReceiptAction({
-      client_id: formOpen.id,
-      service_id: serviceId,
-      account_receipt_number: accountNumber,
-    });
-    setIsLinking(false);
-    if (result.error) {
-      setLinkError(result.error);
-      return;
-    }
-    setLinkForm({ serviceId: null, accountNumber: "" });
-    const receiptsRes = await getClientReceiptsAction(formOpen.id);
-    if (!receiptsRes.error) setClientReceipts(receiptsRes.receipts ?? []);
-    router.refresh();
   };
 
   const handleUnlinkReceipt = async (receiptId) => {
@@ -221,6 +250,10 @@ export function ClientsView({ initialClients, fetchError }) {
     if (isEditing) {
       const result = await updateClientAction(formOpen.id, formData);
       setIsSubmitting(false);
+      if (result.duplicate) {
+        setDuplicateClient(result.duplicate);
+        return;
+      }
       if (result.error) {
         setFormError(result.error);
         return;
@@ -231,6 +264,11 @@ export function ClientsView({ initialClients, fetchError }) {
     }
 
     const result = await createClientAction(formData);
+    if (result.duplicate) {
+      setIsSubmitting(false);
+      setDuplicateClient(result.duplicate);
+      return;
+    }
     if (result.error) {
       setIsSubmitting(false);
       setFormError(result.error);
@@ -612,241 +650,201 @@ export function ClientsView({ initialClients, fetchError }) {
               </div>
 
               <div className="border-t border-zinc-200/80 pt-5 dark:border-zinc-700">
-                <h3 className="mb-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-                  Servicios
-                </h3>
-                {!isEditing ? (
-                  <>
-                    <p className="mb-4 text-xs text-zinc-500 dark:text-zinc-400">
-                      Agrega servicios que se vincularán automáticamente al crear el cliente.
-                    </p>
-                    {servicesLoading ? (
-                      <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                        Cargando servicios…
-                      </p>
-                    ) : servicesList.length === 0 ? (
-                      <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                        Aún no hay servicios definidos. Agrega servicios en la
-                        sección de Servicios primero.
-                      </p>
-                    ) : (
-                      <ul className="grid grid-cols-1 gap-3 tablet:grid-cols-2" role="list">
-                        {servicesList.map((service) => {
-                          const pendingForService = getPendingServicesForService(service.id);
-                          return (
-                            <li
-                              key={service.id}
-                              className="flex flex-col gap-2 rounded-xl border border-zinc-200/80 bg-zinc-50/50 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-800/50"
-                            >
-                              <span className="font-medium text-zinc-900 dark:text-zinc-50">
-                                {service.name}
-                              </span>
-                              {pendingForService.length > 0 && (
-                                <ul className="space-y-1.5" role="list">
-                                  {pendingForService.map((pending) => (
-                                    <li
-                                      key={pending.id}
-                                      className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200/80 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
-                                    >
-                                      <span className="truncate text-xs text-zinc-700 dark:text-zinc-300">
-                                        {pending.account_receipt_number}
-                                      </span>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleRemovePendingService(pending.id)}
-                                        className="shrink-0 text-xs font-medium text-red-600 hover:underline dark:text-red-400"
-                                        aria-label={`Eliminar ${pending.account_receipt_number}`}
-                                      >
-                                        Quitar
-                                      </button>
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
-                              <div className="flex gap-2">
-                                <input
-                                  type="text"
-                                  placeholder="Número de cuenta/recibo"
-                                  value={
-                                    linkForm.serviceId === service.id
-                                      ? linkForm.accountNumber
-                                      : ""
-                                  }
-                                  onChange={(e) =>
-                                    setLinkForm({
-                                      serviceId: service.id,
-                                      accountNumber: e.target.value,
-                                    })
-                                  }
-                                  onFocus={() =>
-                                    setLinkForm((prev) =>
-                                      prev.serviceId === service.id
-                                        ? prev
-                                        : {
-                                            serviceId: service.id,
-                                            accountNumber: "",
-                                          }
-                                    )
-                                  }
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") {
-                                      e.preventDefault();
-                                      handleAddPendingService(e, service.id);
-                                    }
-                                  }}
-                                  className="min-w-0 flex-1 rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm placeholder-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-500 dark:focus:border-emerald-400 dark:focus:ring-emerald-500/30"
-                                  aria-label={`Número de cuenta/recibo para ${service.name}`}
-                                />
-                                <button
-                                  type="button"
-                                  onClick={(e) => handleAddPendingService(e, service.id)}
-                                  disabled={
-                                    linkForm.serviceId !== service.id ||
-                                    !linkForm.accountNumber?.trim()
-                                  }
-                                  className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50 dark:bg-emerald-500 dark:hover:bg-emerald-600"
-                                  aria-label={`Agregar cuenta de ${service.name}`}
-                                >
-                                  Agregar
-                                </button>
-                              </div>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                    {linkError && (
-                      <div
-                        role="alert"
-                        className="mt-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-300"
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+                    Servicios
+                  </h3>
+                  {!adderOpen && servicesList.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleOpenAdder}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-medium text-white transition-all hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600"
+                      aria-label="Agregar servicio"
+                    >
+                      <svg
+                        className="h-3.5 w-3.5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        aria-hidden
                       >
-                        {linkError}
-                      </div>
-                    )}
-                  </>
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 4v16m8-8H4"
+                        />
+                      </svg>
+                      Agregar
+                    </button>
+                  )}
+                </div>
+                <p className="mb-4 text-xs text-zinc-500 dark:text-zinc-400">
+                  {isEditing
+                    ? "Vincular o desvincular servicios. Puedes agregar múltiples cuentas por servicio (ej. dos cuentas de Claro con diferentes números de cuenta/recibo)."
+                    : "Agrega servicios que se vincularán automáticamente al crear el cliente."}
+                </p>
+
+                {servicesLoading ? (
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                    Cargando servicios…
+                  </p>
+                ) : servicesList.length === 0 ? (
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                    Aún no hay servicios definidos. Agrega servicios en la
+                    sección de Servicios primero.
+                  </p>
                 ) : (
                   <>
-                    <p className="mb-4 text-xs text-zinc-500 dark:text-zinc-400">
-                      Vincular o desvincular servicios. Puedes agregar múltiples cuentas por
-                      servicio (ej. dos cuentas de Claro con diferentes
-                      números de cuenta/recibo).
-                    </p>
-                    {servicesLoading ? (
-                      <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                        Cargando servicios…
-                      </p>
-                    ) : servicesList.length === 0 ? (
-                      <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                        Aún no hay servicios definidos. Agrega servicios en la
-                        sección de Servicios primero.
-                      </p>
-                    ) : (
-                      <ul className="grid grid-cols-1 gap-3 tablet:grid-cols-2" role="list">
-                        {servicesList.map((service) => {
-                          const receipts = getReceiptsForService(service.id);
+                    {addedServices.length > 0 ? (
+                      <ul className="space-y-2" role="list">
+                        {addedServices.map((item) => {
+                          const isUnlinking = unlinkingReceiptId === item.id;
                           return (
                             <li
-                              key={service.id}
-                              className="flex flex-col gap-2 rounded-xl border border-zinc-200/80 bg-zinc-50/50 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-800/50"
+                              key={item.id}
+                              className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200/80 bg-zinc-50/50 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-800/50"
                             >
-                              <span className="font-medium text-zinc-900 dark:text-zinc-50">
-                                {service.name}
-                              </span>
-                              {receipts.length > 0 && (
-                                <ul className="space-y-1.5" role="list">
-                                  {receipts.map((receipt) => {
-                                    const isUnlinking =
-                                      unlinkingReceiptId === receipt.id;
-                                    return (
-                                      <li
-                                        key={receipt.id}
-                                        className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200/80 bg-white px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800"
-                                      >
-                                        <span className="truncate text-xs text-zinc-700 dark:text-zinc-300">
-                                          {receipt.account_receipt_number}
-                                        </span>
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            handleUnlinkReceipt(receipt.id)
-                                          }
-                                          disabled={isUnlinking}
-                                          className="shrink-0 text-xs font-medium text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
-                                          aria-label={`Eliminar ${receipt.account_receipt_number}`}
-                                        >
-                                          {isUnlinking ? "…" : "Desvincular"}
-                                        </button>
-                                      </li>
-                                    );
-                                  })}
-                                </ul>
-                              )}
-                              <div className="flex gap-2">
-                                <input
-                                  type="text"
-                                  placeholder="Número de cuenta/recibo"
-                                  value={
-                                    linkForm.serviceId === service.id
-                                      ? linkForm.accountNumber
-                                      : ""
-                                  }
-                                  onChange={(e) =>
-                                    setLinkForm({
-                                      serviceId: service.id,
-                                      accountNumber: e.target.value,
-                                    })
-                                  }
-                                  onFocus={() =>
-                                    setLinkForm((prev) =>
-                                      prev.serviceId === service.id
-                                        ? prev
-                                        : {
-                                            serviceId: service.id,
-                                            accountNumber: "",
-                                          }
-                                    )
-                                  }
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") {
-                                      e.preventDefault();
-                                      handleLinkService(e, service.id);
-                                    }
-                                  }}
-                                  disabled={isLinking}
-                                  className="min-w-0 flex-1 rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm placeholder-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-500 dark:focus:border-emerald-400 dark:focus:ring-emerald-500/30"
-                                  aria-label={`Número de cuenta/recibo para ${service.name}`}
-                                />
-                                <button
-                                  type="button"
-                                  onClick={(e) =>
-                                    handleLinkService(e, service.id)
-                                  }
-                                  disabled={
-                                    isLinking ||
-                                    (linkForm.serviceId !== service.id
-                                      ? true
-                                      : !linkForm.accountNumber?.trim())
-                                  }
-                                  className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50 dark:bg-emerald-500 dark:hover:bg-emerald-600"
-                                  aria-label={`Agregar cuenta de ${service.name}`}
-                                >
-                                  {receipts.length === 0 ? "Vincular" : "Agregar"}
-                                </button>
+                              <div className="flex min-w-0 flex-col">
+                                <span className="truncate font-medium text-zinc-900 dark:text-zinc-50">
+                                  {serviceNameById[item.serviceId] ?? "Servicio"}
+                                </span>
+                                <span className="truncate text-xs text-zinc-600 dark:text-zinc-400">
+                                  {item.accountNumber}
+                                </span>
                               </div>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  isEditing
+                                    ? handleUnlinkReceipt(item.id)
+                                    : handleRemovePendingService(item.id)
+                                }
+                                disabled={isEditing && isUnlinking}
+                                className="shrink-0 text-xs font-medium text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
+                                aria-label={`Quitar ${item.accountNumber}`}
+                              >
+                                {isEditing
+                                  ? isUnlinking
+                                    ? "…"
+                                    : "Desvincular"
+                                  : "Quitar"}
+                              </button>
                             </li>
                           );
                         })}
                       </ul>
+                    ) : (
+                      !adderOpen && (
+                        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                          Aún no hay servicios vinculados. Usa el botón “Agregar”.
+                        </p>
+                      )
                     )}
-                    {linkError && (
-                      <div
-                        role="alert"
-                        className="mt-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-300"
-                      >
-                        {linkError}
+
+                    {adderOpen && (
+                      <div className="mt-3 flex flex-col gap-3 rounded-xl border border-emerald-300/70 bg-emerald-50/40 p-4 dark:border-emerald-500/40 dark:bg-emerald-950/20">
+                        {adderStep === "select" ? (
+                          <>
+                            <label
+                              htmlFor="adder-service"
+                              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                            >
+                              Servicio
+                            </label>
+                            <select
+                              id="adder-service"
+                              value={adderServiceId}
+                              onChange={(e) => setAdderServiceId(e.target.value)}
+                              className={inputClass}
+                              aria-label="Seleccionar servicio"
+                            >
+                              {servicesList.map((service) => (
+                                <option key={service.id} value={service.id}>
+                                  {service.name}
+                                </option>
+                              ))}
+                            </select>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={resetAdder}
+                                className="flex-1 rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 transition-all hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                                aria-label="Cancelar"
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleAdderAccept}
+                                disabled={!adderServiceId}
+                                className="flex-1 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-emerald-700 disabled:opacity-50 dark:bg-emerald-500 dark:hover:bg-emerald-600"
+                                aria-label="Aceptar servicio"
+                              >
+                                Aceptar
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <label
+                              htmlFor="adder-value"
+                              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                            >
+                              {serviceNameById[adderServiceId] ?? "Servicio"} ·
+                              Número de cuenta/recibo
+                            </label>
+                            <input
+                              id="adder-value"
+                              type="text"
+                              autoFocus
+                              placeholder="Número de cuenta/recibo"
+                              value={adderValue}
+                              onChange={(e) => setAdderValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleAdderSave();
+                                }
+                              }}
+                              disabled={isLinking}
+                              className={inputClass}
+                              aria-label="Número de cuenta/recibo"
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setAdderStep("select")}
+                                disabled={isLinking}
+                                className="flex-1 rounded-xl border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-700 transition-all hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                                aria-label="Volver"
+                              >
+                                Atrás
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleAdderSave}
+                                disabled={isLinking || !adderValue.trim()}
+                                className="flex-1 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-emerald-700 disabled:opacity-50 dark:bg-emerald-500 dark:hover:bg-emerald-600"
+                                aria-label="Guardar servicio"
+                              >
+                                {isLinking ? "Guardando…" : "Guardar"}
+                              </button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
                   </>
+                )}
+
+                {linkError && (
+                  <div
+                    role="alert"
+                    className="mt-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-300"
+                  >
+                    {linkError}
+                  </div>
                 )}
               </div>
 
@@ -935,6 +933,96 @@ export function ClientsView({ initialClients, fetchError }) {
                 aria-label="Eliminar cliente"
               >
                 {isDeleting ? "Eliminando…" : "Eliminar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Duplicate phone number warning */}
+      {duplicateClient && (
+        <div
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="duplicate-dialog-title"
+          aria-describedby="duplicate-dialog-desc"
+        >
+          <div className="w-full max-w-sm rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40">
+                <svg
+                  className="h-5 w-5 text-amber-600 dark:text-amber-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4a2 2 0 00-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z"
+                  />
+                </svg>
+              </div>
+              <div className="min-w-0">
+                <h2
+                  id="duplicate-dialog-title"
+                  className="text-xl font-bold text-zinc-900 dark:text-zinc-50"
+                >
+                  Número de teléfono duplicado
+                </h2>
+                <p
+                  id="duplicate-dialog-desc"
+                  className="mt-2 text-sm text-zinc-600 dark:text-zinc-400"
+                >
+                  Ya existe un contacto registrado con el número{" "}
+                  <strong className="text-zinc-900 dark:text-zinc-50">
+                    {duplicateClient.phone_number}
+                  </strong>
+                  .
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-zinc-200/80 bg-zinc-50/60 p-4 dark:border-zinc-700 dark:bg-zinc-800/50">
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Contacto existente
+              </p>
+              <p className="mt-1.5 font-semibold text-zinc-900 dark:text-zinc-50">
+                {duplicateClient.name} {duplicateClient.last_name}
+              </p>
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                {duplicateClient.phone_number || "—"}
+              </p>
+              {duplicateClient.reference && (
+                <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-500">
+                  Ref: {duplicateClient.reference}
+                </p>
+              )}
+            </div>
+
+            <div className="mt-6 flex flex-col gap-3 tablet:flex-row">
+              <button
+                type="button"
+                onClick={() => setDuplicateClient(null)}
+                className="flex-1 rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm font-medium text-zinc-700 transition-all hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                aria-label="Cerrar y corregir el número"
+              >
+                Corregir número
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const target = duplicateClient;
+                  setDuplicateClient(null);
+                  openEdit(target);
+                }}
+                className="flex-1 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-medium text-white transition-all hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:bg-emerald-500 dark:hover:bg-emerald-600 dark:focus:ring-offset-zinc-900"
+                aria-label="Ver el contacto existente"
+              >
+                Ver contacto
               </button>
             </div>
           </div>
