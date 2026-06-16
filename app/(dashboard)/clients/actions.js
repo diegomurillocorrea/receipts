@@ -288,6 +288,39 @@ export async function deleteReceiptAction(clientId, serviceId) {
 }
 
 /**
+ * Update the account/receipt number of a single receipt by id.
+ * @param {string} receiptId
+ * @param {string} accountReceiptNumber
+ * @returns {Promise<{ error: string | null }>}
+ */
+export async function updateReceiptAction(receiptId, accountReceiptNumber) {
+  const auth = await requirePermission("clients", "edit");
+  if (auth.error) return { error: auth.error };
+
+  const account_receipt_number = accountReceiptNumber?.trim();
+  if (!receiptId) {
+    return { error: "El ID del recibo es requerido." };
+  }
+  if (!account_receipt_number) {
+    return { error: "El número de cuenta/recibo es requerido." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("receipts")
+    .update({ account_receipt_number })
+    .eq("id", receiptId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/clients");
+  revalidatePath("/");
+  return { error: null };
+}
+
+/**
  * Delete a single receipt by id (allows multiple receipts per client+service).
  * @param {string} receiptId
  * @returns {Promise<{ error: string | null }>}

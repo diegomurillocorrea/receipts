@@ -11,6 +11,7 @@ import {
   getServicesListAction,
   getClientReceiptsAction,
   createReceiptAction,
+  updateReceiptAction,
   deleteReceiptByIdAction,
 } from "./actions";
 
@@ -62,6 +63,10 @@ export function ClientsView({ initialClients, fetchError }) {
   const [linkError, setLinkError] = useState(null);
   const [isLinking, setIsLinking] = useState(false);
   const [unlinkingReceiptId, setUnlinkingReceiptId] = useState(null);
+  const [editingReceiptId, setEditingReceiptId] = useState(null);
+  const [editingValue, setEditingValue] = useState("");
+  const [editingError, setEditingError] = useState(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [pendingServices, setPendingServices] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -132,6 +137,9 @@ export function ClientsView({ initialClients, fetchError }) {
     setAdderServiceId("");
     setAdderValue("");
     setLinkError(null);
+    setEditingReceiptId(null);
+    setEditingValue("");
+    setEditingError(null);
   }, []);
 
   const openCreate = useCallback(() => {
@@ -260,6 +268,50 @@ export function ClientsView({ initialClients, fetchError }) {
       setClientReceipts((prev) => prev.filter((r) => r.id !== receiptId));
       router.refresh();
     }
+  };
+
+  const handleStartEdit = (item) => {
+    setEditingReceiptId(item.id);
+    setEditingValue(item.accountNumber ?? "");
+    setEditingError(null);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingReceiptId(null);
+    setEditingValue("");
+    setEditingError(null);
+  };
+
+  const handleSaveEdit = async (item) => {
+    const value = editingValue.trim();
+    if (!value) {
+      setEditingError("El número de cuenta/recibo es requerido.");
+      return;
+    }
+    setEditingError(null);
+
+    if (isEditing) {
+      setIsSavingEdit(true);
+      const result = await updateReceiptAction(item.id, value);
+      setIsSavingEdit(false);
+      if (result.error) {
+        setEditingError(result.error);
+        return;
+      }
+      setClientReceipts((prev) =>
+        prev.map((r) =>
+          r.id === item.id ? { ...r, account_receipt_number: value } : r
+        )
+      );
+      router.refresh();
+    } else {
+      setPendingServices((prev) =>
+        prev.map((s) =>
+          s.id === item.id ? { ...s, account_receipt_number: value } : s
+        )
+      );
+    }
+    handleCancelEdit();
   };
 
   const handleFormSubmit = async (e) => {
@@ -738,10 +790,11 @@ export function ClientsView({ initialClients, fetchError }) {
                       <ul className="space-y-2" role="list">
                         {addedServices.map((item) => {
                           const isUnlinking = unlinkingReceiptId === item.id;
+                          const isRowEditing = editingReceiptId === item.id;
                           return (
                             <li
                               key={item.id}
-                              className="flex items-center justify-between gap-3 rounded-xl border border-zinc-200/80 bg-zinc-50/50 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-800/50"
+                              className="flex flex-col gap-3 rounded-xl border border-zinc-200/80 bg-zinc-50/50 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-800/50 sm:flex-row sm:items-center sm:justify-between"
                             >
                               <div className="flex min-w-0 items-center gap-3">
                                 {serviceImageUrlById[item.serviceId] ? (
@@ -760,32 +813,95 @@ export function ClientsView({ initialClients, fetchError }) {
                                     </svg>
                                   </div>
                                 )}
-                                <div className="flex min-w-0 flex-col">
+                                <div className="flex min-w-0 flex-1 flex-col">
                                   <span className="truncate font-medium text-zinc-900 dark:text-zinc-50">
                                     {serviceNameById[item.serviceId] ?? "Servicio"}
                                   </span>
-                                  <span className="truncate text-xs text-zinc-600 dark:text-zinc-400">
-                                    {item.accountNumber}
-                                  </span>
+                                  {isRowEditing ? (
+                                    <>
+                                      <input
+                                        type="text"
+                                        value={editingValue}
+                                        onChange={(e) => setEditingValue(e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter") {
+                                            e.preventDefault();
+                                            handleSaveEdit(item);
+                                          }
+                                          if (e.key === "Escape") handleCancelEdit();
+                                        }}
+                                        disabled={isSavingEdit}
+                                        className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 placeholder-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100"
+                                        placeholder="Número de cuenta/recibo"
+                                        aria-label="Editar número de cuenta/recibo"
+                                        autoFocus
+                                      />
+                                      {editingError && (
+                                        <span className="mt-1 text-xs text-red-600 dark:text-red-400">
+                                          {editingError}
+                                        </span>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <span className="truncate text-xs text-zinc-600 dark:text-zinc-400">
+                                      {item.accountNumber}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  isEditing
-                                    ? handleUnlinkReceipt(item.id)
-                                    : handleRemovePendingService(item.id)
-                                }
-                                disabled={isEditing && isUnlinking}
-                                className="shrink-0 text-xs font-medium text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
-                                aria-label={`Quitar ${item.accountNumber}`}
-                              >
-                                {isEditing
-                                  ? isUnlinking
-                                    ? "…"
-                                    : "Desvincular"
-                                  : "Quitar"}
-                              </button>
+                              <div className="flex shrink-0 items-center gap-3 self-end sm:self-auto">
+                                {isRowEditing ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSaveEdit(item)}
+                                      disabled={isSavingEdit}
+                                      className="text-xs font-medium text-emerald-600 hover:underline disabled:opacity-50 dark:text-emerald-400"
+                                      aria-label={`Guardar ${item.accountNumber}`}
+                                    >
+                                      {isSavingEdit ? "…" : "Guardar"}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={handleCancelEdit}
+                                      disabled={isSavingEdit}
+                                      className="text-xs font-medium text-zinc-500 hover:underline disabled:opacity-50 dark:text-zinc-400"
+                                      aria-label="Cancelar edición"
+                                    >
+                                      Cancelar
+                                    </button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleStartEdit(item)}
+                                      disabled={isUnlinking}
+                                      className="text-xs font-medium text-emerald-600 hover:underline disabled:opacity-50 dark:text-emerald-400"
+                                      aria-label={`Editar ${item.accountNumber}`}
+                                    >
+                                      Editar
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        isEditing
+                                          ? handleUnlinkReceipt(item.id)
+                                          : handleRemovePendingService(item.id)
+                                      }
+                                      disabled={isEditing && isUnlinking}
+                                      className="text-xs font-medium text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
+                                      aria-label={`Quitar ${item.accountNumber}`}
+                                    >
+                                      {isEditing
+                                        ? isUnlinking
+                                          ? "…"
+                                          : "Desvincular"
+                                        : "Quitar"}
+                                    </button>
+                                  </>
+                                )}
+                              </div>
                             </li>
                           );
                         })}
