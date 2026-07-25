@@ -21,9 +21,41 @@ function shouldRedirectAuthenticatedUserToHome(pathname) {
   return matchesPathList(pathname, AUTH_REDIRECT_HOME_PATHS);
 }
 
+function getCurrentSupabaseCookiePrefix() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!url) return null;
+
+  try {
+    const host = new URL(url).hostname;
+    const projectRef = host.split(".")[0];
+    if (!projectRef) return null;
+    return `sb-${projectRef}-`;
+  } catch {
+    return null;
+  }
+}
+
+/** Borra cookies de auth de otros proyectos Supabase (evita 431 por headers enormes). */
+function clearStaleSupabaseCookies(request, response) {
+  const currentPrefix = getCurrentSupabaseCookiePrefix();
+  if (!currentPrefix) return;
+
+  for (const cookie of request.cookies.getAll()) {
+    if (!cookie.name.startsWith("sb-")) continue;
+    if (cookie.name.startsWith(currentPrefix)) continue;
+
+    response.cookies.set(cookie.name, "", {
+      path: "/",
+      maxAge: 0,
+    });
+  }
+}
+
 export async function proxy(request) {
   const response = NextResponse.next({ request });
   const { pathname } = request.nextUrl;
+
+  clearStaleSupabaseCookies(request, response);
 
   const supabase = createClient(request, response);
   const {
