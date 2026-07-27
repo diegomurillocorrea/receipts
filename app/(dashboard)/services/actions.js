@@ -19,7 +19,16 @@ function normalizeLink(value) {
 }
 
 /**
- * @param {{ name: string; link?: string }} formData
+ * @param {unknown} value
+ * @returns {string | null}
+ */
+function normalizeCategoryId(value) {
+  const raw = String(value ?? "").trim();
+  return raw.length > 0 ? raw : null;
+}
+
+/**
+ * @param {{ name: string; link?: string; category_id?: string | null }} formData
  * @returns {Promise<{ error: string | null; data?: { id: string } }>}
  */
 export async function createServiceAction(formData) {
@@ -35,7 +44,11 @@ export async function createServiceAction(formData) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("services")
-    .insert({ name, link: normalizeLink(formData.link) })
+    .insert({
+      name,
+      link: normalizeLink(formData.link),
+      category_id: normalizeCategoryId(formData.category_id),
+    })
     .select("id")
     .single();
 
@@ -50,7 +63,7 @@ export async function createServiceAction(formData) {
 
 /**
  * @param {string} id
- * @param {{ name: string; link?: string }} formData
+ * @param {{ name: string; link?: string; category_id?: string | null }} formData
  * @returns {Promise<{ error: string | null }>}
  */
 export async function updateServiceAction(id, formData) {
@@ -70,7 +83,11 @@ export async function updateServiceAction(id, formData) {
   const supabase = await createClient();
   const { error } = await supabase
     .from("services")
-    .update({ name, link: normalizeLink(formData.link) })
+    .update({
+      name,
+      link: normalizeLink(formData.link),
+      category_id: normalizeCategoryId(formData.category_id),
+    })
     .eq("id", id);
 
   if (error) {

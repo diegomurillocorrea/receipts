@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Pencil, Trash2, Send, Eye, FileText, Upload, Info } from "lucide-react";
+import { Pencil, Trash2, Eye, FileText, Upload, Info } from "lucide-react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
 import {
   createPaymentAction,
@@ -12,7 +12,6 @@ import {
   uploadPaymentProofAction,
   removePaymentProofAction,
   getPaymentProofUrlAction,
-  generatePaymentVoucherPdfAction,
   getServicesForConsultaAction,
 } from "./actions";
 import {
@@ -220,8 +219,6 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
   const [proofPreviewLoading, setProofPreviewLoading] = useState(false);
   const [proofPreviewError, setProofPreviewError] = useState(null);
   const [proofUploadModalPayment, setProofUploadModalPayment] = useState(null);
-  const [voucherSendingId, setVoucherSendingId] = useState(null);
-  const [voucherNotice, setVoucherNotice] = useState(null);
   const proofFileInputRef = useRef(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingPayment, setEditingPayment] = useState(null);
@@ -238,7 +235,6 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
   const { can } = usePermissions();
   const canSeeEstado = can("payments", "view_status");
   const canSeeProofActions = can("payments", "manage_proof");
-  const canSendVoucher = can("payments", "send_voucher");
   const canCreatePayment = can("payments", "create");
   const canEditPaymentPerm = can("payments", "edit");
   const canDeletePayment = can("payments", "delete");
@@ -453,31 +449,6 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
     }
     router.refresh();
   }, [editingPayment?.id]);
-
-  const handleSendVoucherWhatsApp = useCallback(
-    async (payment) => {
-      if (!payment?.id) return;
-      setVoucherSendingId(payment.id);
-      setVoucherNotice(null);
-      const result = await generatePaymentVoucherPdfAction(payment.id);
-      setVoucherSendingId(null);
-      if (result.error) {
-        setVoucherNotice({ variant: "error", message: result.error });
-        return;
-      }
-      router.refresh();
-      if (result.whatsappUrl) {
-        window.open(result.whatsappUrl, "_blank", "noopener,noreferrer");
-        return;
-      }
-      setVoucherNotice({
-        variant: "success",
-        message: "PDF del comprobante guardado. El cliente no tiene un telefono valido para WhatsApp.",
-        publicUrl: result.publicUrl,
-      });
-    },
-    [router]
-  );
 
   const getFilteredPayments = useCallback(() => {
     const [year, month, day] = selectedDate.split("-").map(Number);
@@ -1179,38 +1150,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
             </div>
           </div>
         </div>
-        {voucherNotice && (
-          <div
-            role="alert"
-            className={`border-b px-4 py-3 text-sm tablet:px-6 ${
-              voucherNotice.variant === "error"
-                ? "border-red-200 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300"
-                : "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-200"
-            }`}
-          >
-            <p>{voucherNotice.message}</p>
-            {voucherNotice.publicUrl ? (
-              <a
-                href={voucherNotice.publicUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-2 inline-block font-medium underline underline-offset-2"
-              >
-                Abrir PDF del comprobante
-              </a>
-            ) : null}
-            <div className="mt-2">
-              <button
-                type="button"
-                onClick={() => setVoucherNotice(null)}
-                className="text-xs text-zinc-600 underline dark:text-zinc-400"
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
-        )}
-                {filteredPayments.length === 0 ? (
+        {filteredPayments.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-4 px-4 py-20 text-center">
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
               No hay pagos para mostrar con los filtros actuales.
@@ -1218,9 +1158,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
           </div>
         ) : isMobile ? (
           <ul className="divide-y divide-zinc-200/80 px-4 py-2 dark:divide-zinc-800 tablet:px-6" role="list">
-            {filteredPayments.map((payment, index) => {
-              const isSendingVoucher = voucherSendingId === payment.id;
-              return (
+            {filteredPayments.map((payment, index) => (
                 <li
                   key={payment.id}
                   className="flex flex-col gap-2 py-4 first:pt-4 last:pb-4 tablet:py-5"
@@ -1280,18 +1218,6 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                         <Trash2 className="h-4 w-4" aria-hidden />
                       </button>
                     )}
-                    {canSendVoucher && (
-                      <button
-                        type="button"
-                        onClick={() => handleSendVoucherWhatsApp(payment)}
-                        disabled={isSendingVoucher}
-                        className="rounded p-1.5 text-cyan-500 hover:bg-cyan-100 disabled:opacity-50 dark:text-cyan-400 dark:hover:bg-cyan-900/40"
-                        aria-label={`Generar PDF y enviar comprobante por WhatsApp a ${getPaymentReceiptDisplay(payment)}`}
-                        title="Genera un PDF con logo y datos, lo guarda y abre WhatsApp con el enlace al archivo"
-                      >
-                        <Send className={`h-4 w-4 ${isSendingVoucher ? "animate-pulse" : ""}`} aria-hidden />
-                      </button>
-                    )}
                     {getProofPublicUrl(payment) ? (
                       <>
                         <button
@@ -1340,8 +1266,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                     )}
                   </div>
                 </li>
-              );
-            })}
+            ))}
           </ul>
         ) : (
           <div className="overflow-x-auto">
@@ -1375,9 +1300,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                 </tr>
               </thead>
               <tbody>
-                {filteredPayments.map((payment, index) => {
-                  const isSendingVoucher = voucherSendingId === payment.id;
-                  return (
+                {filteredPayments.map((payment, index) => (
                     <tr
                       key={payment.id}
                       className="border-b border-zinc-100 last:border-0 transition-colors hover:bg-zinc-50/50 dark:border-zinc-800 dark:hover:bg-zinc-800/30"
@@ -1447,18 +1370,6 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                               <Trash2 className="h-4 w-4" aria-hidden />
                             </button>
                           )}
-                          {canSendVoucher && (
-                            <button
-                              type="button"
-                              onClick={() => handleSendVoucherWhatsApp(payment)}
-                              disabled={isSendingVoucher}
-                              className="rounded p-1.5 text-cyan-500 hover:bg-cyan-100 disabled:opacity-50 dark:text-cyan-400 dark:hover:bg-cyan-900/40"
-                              aria-label={`Generar PDF y enviar comprobante por WhatsApp a ${getPaymentReceiptDisplay(payment)}`}
-                              title="Genera un PDF con logo y datos, lo guarda y abre WhatsApp con el enlace al archivo"
-                            >
-                              <Send className={`h-4 w-4 ${isSendingVoucher ? "animate-pulse" : ""}`} aria-hidden />
-                            </button>
-                          )}
                           {getProofPublicUrl(payment) ? (
                             <>
                               <button
@@ -1508,8 +1419,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                         </div>
                       </td>
                     </tr>
-                  );
-                })}
+                ))}
               </tbody>
             </table>
           </div>

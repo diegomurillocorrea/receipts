@@ -49,6 +49,7 @@ const NAV_ITEMS = [
   { href: "/payments", label: "Pagos", resource: "payments" },
   { href: "/clients", label: "Clientes", resource: "clients" },
   { href: "/services", label: "Servicios", resource: "services" },
+  { href: "/categories", label: "Categorías", resource: "categories" },
   { href: "/payment-methods", label: "Métodos de pago", resource: "payment_methods" },
   { href: "/users", label: "Usuarios", resource: "users" },
   { href: "/roles", label: "Roles", resource: "roles" },
@@ -64,7 +65,7 @@ function NavContent({ pathname, onNavClick, hideLogo, hideThemeToggle }) {
       {!hideLogo && (
         <div className="flex h-16 items-center border-b border-zinc-200/80 px-5 dark:border-zinc-800">
           <Link
-            href="/payments"
+            href="/"
             onClick={onNavClick}
             className="flex min-w-0 items-center gap-3 rounded-lg text-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 dark:text-zinc-50 dark:focus:ring-offset-zinc-900"
             aria-label="Ir a inicio — DAIEGO Receipts"
@@ -185,14 +186,64 @@ function SignOutButton() {
   );
 }
 
+function CompactSignOutButton() {
+  const router = useRouter();
+  const handleSignOut = useCallback(async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.refresh();
+    router.push("/login");
+  }, [router]);
+
+  return (
+    <button
+      type="button"
+      onClick={handleSignOut}
+      className="flex h-10 w-10 items-center justify-center rounded-xl text-zinc-600 transition-colors hover:bg-zinc-200 hover:text-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50 dark:focus:ring-offset-zinc-950"
+      aria-label="Cerrar sesión"
+    >
+      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+        />
+      </svg>
+    </button>
+  );
+}
+
 export default function DashboardLayout({ children }) {
   const pathname = usePathname();
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === "mobile";
   const isTablet = breakpoint === "tablet";
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const isHome = pathname === "/";
 
   const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
+
+  if (isHome) {
+    return (
+      <PermissionsProvider>
+        <div className="fixed inset-0 flex flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950">
+          <div className="absolute right-4 top-4 z-10 flex items-center gap-1">
+            <MobileThemeToggle />
+            <CompactSignOutButton />
+          </div>
+          <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+            <div className="w-full flex-1 px-4 py-4 tablet:px-6 desktop:px-8">
+              {children}
+            </div>
+            <div className="shrink-0">
+              <Footer />
+            </div>
+          </main>
+        </div>
+      </PermissionsProvider>
+    );
+  }
 
   return (
     <PermissionsProvider>
@@ -227,7 +278,7 @@ export default function DashboardLayout({ children }) {
               </svg>
             </button>
             <Link
-              href="/payments"
+              href="/"
               onClick={closeMobileMenu}
               className="flex min-w-0 items-center gap-2 rounded-lg text-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 dark:text-zinc-50 dark:focus:ring-offset-zinc-900"
               aria-label="Ir a inicio — DAIEGO Receipts"

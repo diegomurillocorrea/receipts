@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
 import { usePermissions } from "../permissions-provider";
+import { sortServicesByCategory } from "@/lib/services/sort-by-category";
 import {
   createServiceAction,
   updateServiceAction,
@@ -29,7 +30,12 @@ function getServiceImageUrl(service) {
   return `${base}/storage/v1/object/public/${service.image_bucket}/${service.image_path}`;
 }
 
-export function ServicesView({ initialServices, fetchError }) {
+function getCategoryName(service) {
+  if (service?.categories?.name) return service.categories.name;
+  return null;
+}
+
+export function ServicesView({ initialServices, initialCategories = [], fetchError }) {
   const router = useRouter();
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === "mobile";
@@ -38,9 +44,11 @@ export function ServicesView({ initialServices, fetchError }) {
   const canEdit = can("services", "edit");
   const canDelete = can("services", "delete");
   const services = initialServices;
+  const categories = initialCategories;
   const [formOpen, setFormOpen] = useState(null);
   const [formName, setFormName] = useState("");
   const [formLink, setFormLink] = useState("");
+  const [formCategoryId, setFormCategoryId] = useState("");
   const [formError, setFormError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -65,17 +73,22 @@ export function ServicesView({ initialServices, fetchError }) {
   const isEditing = formOpen && formOpen !== "create";
 
   const filteredServices = useMemo(() => {
-    if (!searchQuery.trim()) return services;
     const q = searchQuery.trim().toLowerCase();
-    return services.filter((s) =>
-      (s.name ?? "").toLowerCase().includes(q)
-    );
+    const matched = !q
+      ? services
+      : services.filter((s) => {
+          const nameMatch = (s.name ?? "").toLowerCase().includes(q);
+          const categoryMatch = (getCategoryName(s) ?? "").toLowerCase().includes(q);
+          return nameMatch || categoryMatch;
+        });
+    return sortServicesByCategory(matched);
   }, [services, searchQuery]);
 
   const openCreate = useCallback(() => {
     setFormOpen("create");
     setFormName("");
     setFormLink("");
+    setFormCategoryId("");
     setFormError(null);
     setImageError(null);
     setFormImageFile(null);
@@ -85,6 +98,7 @@ export function ServicesView({ initialServices, fetchError }) {
     setFormOpen(service);
     setFormName(service.name ?? "");
     setFormLink(service.link ?? "");
+    setFormCategoryId(service.category_id ?? "");
     setFormError(null);
     setImageError(null);
     setFormImageFile(null);
@@ -94,6 +108,7 @@ export function ServicesView({ initialServices, fetchError }) {
     setFormOpen(null);
     setFormName("");
     setFormLink("");
+    setFormCategoryId("");
     setFormError(null);
     setImageError(null);
     setFormImageFile(null);
@@ -106,19 +121,21 @@ export function ServicesView({ initialServices, fetchError }) {
     setIsSubmitting(true);
 
     let targetId = isEditing ? formOpen.id : null;
+    const payload = {
+      name: formName,
+      link: formLink,
+      category_id: formCategoryId || null,
+    };
 
     if (isEditing) {
-      const result = await updateServiceAction(formOpen.id, {
-        name: formName,
-        link: formLink,
-      });
+      const result = await updateServiceAction(formOpen.id, payload);
       if (result.error) {
         setIsSubmitting(false);
         setFormError(result.error);
         return;
       }
     } else {
-      const result = await createServiceAction({ name: formName, link: formLink });
+      const result = await createServiceAction(payload);
       if (result.error) {
         setIsSubmitting(false);
         setFormError(result.error);
@@ -232,16 +249,16 @@ export function ServicesView({ initialServices, fetchError }) {
       {services.length > 0 && (
         <div className="relative">
           <label htmlFor="service-search" className="sr-only">
-            Buscar por nombre del servicio
+            Buscar por nombre o categoría del servicio
           </label>
           <input
             id="service-search"
             type="search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar por nombre del servicio..."
+            placeholder="Buscar por nombre o categoría..."
             className="w-full rounded-full border border-zinc-300 bg-white pl-10 pr-4 py-2.5 text-zinc-900 placeholder-zinc-400 transition-all duration-200 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-500/50 dark:bg-zinc-700 dark:text-zinc-100 dark:placeholder-zinc-400 dark:focus:border-emerald-400 dark:focus:ring-emerald-500/30"
-            aria-label="Buscar servicios por nombre"
+            aria-label="Buscar servicios por nombre o categoría"
           />
           <svg
             className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 dark:text-zinc-500"
@@ -329,6 +346,9 @@ export function ServicesView({ initialServices, fetchError }) {
                     <span className="font-semibold text-zinc-900 dark:text-zinc-50">
                       {service.name}
                     </span>
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                      {getCategoryName(service) ?? "Sin categoría"}
+                    </span>
                     {service.link && (
                       <a
                         href={service.link}
@@ -386,6 +406,9 @@ export function ServicesView({ initialServices, fetchError }) {
                     Nombre
                   </th>
                   <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
+                    Categoría
+                  </th>
+                  <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
                     Link
                   </th>
                   <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
@@ -427,6 +450,11 @@ export function ServicesView({ initialServices, fetchError }) {
                     </td>
                     <td className="px-4 py-3.5 font-medium text-zinc-900 dark:text-zinc-50 tablet:px-6">
                       {service.name}
+                    </td>
+                    <td className="px-4 py-3.5 text-zinc-600 dark:text-zinc-400 tablet:px-6">
+                      {getCategoryName(service) ?? (
+                        <span className="text-zinc-400 dark:text-zinc-600">—</span>
+                      )}
                     </td>
                     <td className="max-w-[16rem] px-4 py-3.5 tablet:px-6">
                       {service.link ? (
@@ -519,6 +547,34 @@ export function ServicesView({ initialServices, fetchError }) {
                   className={inputClass}
                   aria-invalid={!!formError}
                 />
+              </div>
+              <div>
+                <label
+                  htmlFor="service-category"
+                  className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Categoría
+                </label>
+                <select
+                  id="service-category"
+                  value={formCategoryId}
+                  onChange={(e) => setFormCategoryId(e.target.value)}
+                  disabled={isSubmitting}
+                  className={inputClass}
+                  aria-label="Categoría del servicio"
+                >
+                  <option value="">Sin categoría</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+                {categories.length === 0 && (
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                    Crea categorías en el menú Categorías para asignarlas aquí.
+                  </p>
+                )}
               </div>
               <div>
                 <label

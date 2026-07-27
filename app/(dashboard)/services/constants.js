@@ -1,5 +1,5 @@
-/** Bucket público para las imágenes de los servicios */
-export const SERVICE_IMAGE_BUCKET = "service-images";
+/** Bucket público para los logos de los servicios */
+export const SERVICE_IMAGE_BUCKET = "service-logos";
 
 /** Tipos de imagen permitidos para la imagen del servicio */
 export const SERVICE_IMAGE_ALLOWED_TYPES = [
