@@ -5,8 +5,9 @@ import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/auth/permissions";
 import {
   PAYMENT_PROOF_BUCKET,
-  PAYMENT_STATUS_PAID,
-  PAYMENT_STATUS_PENDING,
+  normalizePaymentStatus,
+  PAYMENT_STATUS_CANCELLED,
+  PAYMENT_STATUS_REGISTERED,
 } from "./constants";
 
 const SEARCH_DEBOUNCE_MIN_LENGTH = 2;
@@ -137,7 +138,7 @@ export async function getServicesForConsultaAction() {
 
 /**
  * @param {{ receipt_id: string; total_amount: number; payment_method_id: string; status?: number; created_at?: string; add_commission?: boolean; custom_commission?: number | null }} payload
- * @returns {Promise<{ error: string | null }>}
+ * @returns {Promise<{ error: string | null; id?: string | null }>}
  */
 export async function createPaymentAction(payload) {
   const auth = await requirePermission("payments", "create");
@@ -146,8 +147,8 @@ export async function createPaymentAction(payload) {
   const receipt_id = payload.receipt_id?.trim();
   const total_amount = Number(payload.total_amount);
   const payment_method_id = payload.payment_method_id?.trim();
-  const status =
-    payload.status === PAYMENT_STATUS_PAID ? PAYMENT_STATUS_PAID : PAYMENT_STATUS_PENDING;
+  // Registrado on create. Cancelado is set when a voucher/proof is uploaded.
+  const status = PAYMENT_STATUS_REGISTERED;
   const created_at = payload.created_at?.trim() || null;
   const add_commission = payload.add_commission !== false;
   const custom_commission =
@@ -189,7 +190,11 @@ export async function createPaymentAction(payload) {
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.from("payments").insert(insertPayload);
+  const { data, error } = await supabase
+    .from("payments")
+    .insert(insertPayload)
+    .select("id")
+    .single();
 
   if (error) {
     return { error: error.message };
@@ -197,7 +202,7 @@ export async function createPaymentAction(payload) {
 
   revalidatePath("/payments");
   revalidatePath("/");
-  return { error: null };
+  return { error: null, id: data?.id ?? null };
 }
 
 /**
@@ -216,8 +221,9 @@ export async function updatePaymentAction(id, payload) {
   const receipt_id = payload.receipt_id?.trim();
   const total_amount = Number(payload.total_amount);
   const payment_method_id = payload.payment_method_id?.trim();
-  const status =
-    payload.status === PAYMENT_STATUS_PAID ? PAYMENT_STATUS_PAID : PAYMENT_STATUS_PENDING;
+  const status = normalizePaymentStatus(
+    payload.status ?? PAYMENT_STATUS_REGISTERED
+  );
   const created_at = payload.created_at?.trim() || null;
   const add_commission = payload.add_commission !== false;
   const custom_commission =
@@ -340,7 +346,11 @@ export async function uploadPaymentProofAction(paymentId, formData) {
 
   const { error: updateError } = await supabase
     .from("payments")
-    .update({ proof_bucket: PAYMENT_PROOF_BUCKET, proof_path: path })
+    .update({
+      proof_bucket: PAYMENT_PROOF_BUCKET,
+      proof_path: path,
+      status: PAYMENT_STATUS_CANCELLED,
+    })
     .eq("id", paymentId);
 
   if (updateError) {

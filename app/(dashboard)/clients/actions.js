@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/auth/permissions";
 
+const EL_SALVADOR_COUNTRY_CODE = "503";
+
 /**
  * @typedef {Object} ClientFormData
  * @property {string} name
@@ -20,6 +22,34 @@ import { requirePermission } from "@/lib/auth/permissions";
  * @property {string | null} phone_number
  * @property {string | null} reference
  */
+
+/**
+ * Normalize client phones to El Salvador E.164 (+503XXXXXXXX).
+ * Accepts local 8-digit numbers or values that already include 503 / +503.
+ * @param {string | null | undefined} value
+ * @returns {{ phone: string | null; error: string | null }}
+ */
+function normalizeElSalvadorPhoneNumber(value) {
+  const input = value?.trim() ?? "";
+  if (!input) return { phone: null, error: null };
+
+  const digits = input.replace(/\D/g, "");
+  if (!digits) return { phone: null, error: null };
+
+  let localDigits = digits;
+  if (digits.startsWith(EL_SALVADOR_COUNTRY_CODE) && digits.length === 11) {
+    localDigits = digits.slice(EL_SALVADOR_COUNTRY_CODE.length);
+  }
+
+  if (localDigits.length !== 8) {
+    return {
+      phone: null,
+      error: "El teléfono debe tener 8 dígitos (El Salvador).",
+    };
+  }
+
+  return { phone: `+${EL_SALVADOR_COUNTRY_CODE}${localDigits}`, error: null };
+}
 
 /**
  * Find an existing client that uses the given phone number.
@@ -58,10 +88,15 @@ export async function createClientAction(formData) {
 
   const name = formData.name?.trim();
   const last_name = formData.last_name?.trim();
-  const phone_number = formData.phone_number?.trim() || null;
+  const { phone: phone_number, error: phoneError } = normalizeElSalvadorPhoneNumber(
+    formData.phone_number
+  );
 
   if (!name || !last_name) {
     return { error: "El nombre y apellido son requeridos." };
+  }
+  if (phoneError) {
+    return { error: phoneError };
   }
 
   const supabase = await createClient();
@@ -117,10 +152,15 @@ export async function updateClientAction(id, formData) {
 
   const name = formData.name?.trim();
   const last_name = formData.last_name?.trim();
-  const phone_number = formData.phone_number?.trim() || null;
+  const { phone: phone_number, error: phoneError } = normalizeElSalvadorPhoneNumber(
+    formData.phone_number
+  );
 
   if (!name || !last_name) {
     return { error: "El nombre y apellido son requeridos." };
+  }
+  if (phoneError) {
+    return { error: phoneError };
   }
 
   const supabase = await createClient();

@@ -22,6 +22,22 @@ const EMPTY_FORM = {
   reference: "",
 };
 
+const EL_SALVADOR_PHONE_PREFIX = "+503";
+
+/**
+ * Show only the local 8 digits in the form (country code is fixed in the UI).
+ * @param {string | null | undefined} phone
+ * @returns {string}
+ */
+function toLocalPhoneInput(phone) {
+  const digits = (phone ?? "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("503") && digits.length === 11) {
+    return digits.slice(3);
+  }
+  return digits.slice(-8);
+}
+
 function formatDate(isoString) {
   if (!isoString) return "—";
   const d = new Date(isoString);
@@ -155,7 +171,7 @@ export function ClientsView({ initialClients, fetchError }) {
     setFormData({
       name: client.name ?? "",
       last_name: client.last_name ?? "",
-      phone_number: client.phone_number ?? "",
+      phone_number: toLocalPhoneInput(client.phone_number),
       reference: client.reference ?? "",
     });
     setFormError(null);
@@ -393,13 +409,28 @@ export function ClientsView({ initialClients, fetchError }) {
   return (
     <div className="space-y-6 tablet:space-y-8">
       <header className="flex flex-col gap-4 tablet:flex-row tablet:items-center tablet:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 tablet:text-3xl">
-            Clientes
-          </h1>
-          <p className="mt-1.5 text-sm text-zinc-600 dark:text-zinc-400 tablet:text-base">
-            Ver y gestionar clientes. Agregar o editar clientes y asignar servicios.
-          </p>
+        <div className="flex items-start gap-3">
+          <span
+            className="mt-1 h-10 w-1 shrink-0 rounded-full bg-emerald-500"
+            aria-hidden
+          />
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 tablet:text-3xl">
+              Clientes
+            </h1>
+            <p className="mt-1.5 text-sm text-zinc-600 dark:text-zinc-400 tablet:text-base">
+              Ver y gestionar clientes. Agregar o editar clientes y asignar servicios.
+              {clients.length > 0 ? (
+                <>
+                  {" "}
+                  <span className="font-medium text-emerald-700 dark:text-emerald-400">
+                    {clients.length}{" "}
+                    {clients.length === 1 ? "cliente" : "clientes"}
+                  </span>
+                </>
+              ) : null}
+            </p>
+          </div>
         </div>
         {canCreate && (
         <button
@@ -454,14 +485,27 @@ export function ClientsView({ initialClients, fetchError }) {
       )}
 
       <div className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="border-b border-zinc-200/80 bg-zinc-50/50 px-4 py-3.5 dark:border-zinc-800 dark:bg-zinc-800/30 tablet:px-6">
-          <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+        <div className="border-b-2 border-emerald-500 bg-emerald-50/40 px-4 py-3.5 dark:bg-emerald-950/20 tablet:px-6">
+          <h2 className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
             Lista de clientes
           </h2>
         </div>
 
         {clients.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-5 px-4 py-20 text-center">
+            <div
+              className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+              aria-hidden
+            >
+              <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.75}
+                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                />
+              </svg>
+            </div>
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
               Aún no hay clientes. Agrega tu primer cliente para comenzar.
             </p>
@@ -495,7 +539,7 @@ export function ClientsView({ initialClients, fetchError }) {
             {filteredClients.map((client, index) => (
               <li
                 key={client.id}
-                className="flex flex-col gap-2 px-4 py-4 first:pt-4 last:pb-4 tablet:px-6"
+                className="flex flex-col gap-2 px-4 py-4 first:pt-4 last:pb-4 transition-colors hover:bg-emerald-50/40 dark:hover:bg-emerald-950/10 tablet:px-6"
               >
                 <div className="flex flex-col gap-0.5">
                   <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400" aria-hidden>
@@ -577,7 +621,7 @@ export function ClientsView({ initialClients, fetchError }) {
                 {filteredClients.map((client, index) => (
                   <tr
                     key={client.id}
-                    className="border-b border-zinc-100 last:border-0 transition-colors hover:bg-zinc-50/50 dark:border-zinc-800 dark:hover:bg-zinc-800/30"
+                    className="border-b border-zinc-100 last:border-0 transition-colors hover:bg-emerald-50/40 dark:border-zinc-800 dark:hover:bg-emerald-950/10"
                   >
                     <td className="w-12 px-2 py-3.5 text-zinc-500 dark:text-zinc-400 tablet:px-4" aria-label={`Fila ${index + 1}`}>
                       {index + 1}
@@ -702,19 +746,35 @@ export function ClientsView({ initialClients, fetchError }) {
                 >
                   Número de teléfono
                 </label>
-                <input
-                  id="client-phone"
-                  type="tel"
-                  value={formData.phone_number}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      phone_number: e.target.value,
-                    }))
-                  }
-                  disabled={isSubmitting}
-                  className={inputClass}
-                />
+                <div className="flex overflow-hidden rounded-xl border border-zinc-300 bg-white focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 dark:border-zinc-600 dark:bg-zinc-800 dark:focus-within:border-emerald-400 dark:focus-within:ring-emerald-500/30">
+                  <span
+                    className="flex shrink-0 items-center border-r border-zinc-300 bg-zinc-50 px-3 text-sm font-medium text-zinc-600 dark:border-zinc-600 dark:bg-zinc-800/80 dark:text-zinc-300"
+                    aria-hidden
+                  >
+                    {EL_SALVADOR_PHONE_PREFIX}
+                  </span>
+                  <input
+                    id="client-phone"
+                    type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel-national"
+                    maxLength={8}
+                    placeholder="70000000"
+                    value={formData.phone_number}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        phone_number: e.target.value.replace(/\D/g, "").slice(0, 8),
+                      }))
+                    }
+                    disabled={isSubmitting}
+                    className="w-full border-0 bg-transparent px-4 py-2.5 text-zinc-900 placeholder-zinc-400 focus:outline-none focus:ring-0 disabled:opacity-50 dark:text-zinc-100 dark:placeholder-zinc-500"
+                    aria-label="Número de teléfono de El Salvador"
+                  />
+                </div>
+                <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+                  Se guarda como {EL_SALVADOR_PHONE_PREFIX} + 8 dígitos
+                </p>
               </div>
               <div>
                 <label

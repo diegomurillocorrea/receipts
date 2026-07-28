@@ -129,13 +129,28 @@ export function CategoriesView({ initialCategories, fetchError }) {
   return (
     <div className="space-y-6 tablet:space-y-8">
       <header className="flex flex-col gap-4 tablet:flex-row tablet:items-center tablet:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 tablet:text-3xl">
-            Categorías
-          </h1>
-          <p className="mt-1.5 text-sm text-zinc-600 dark:text-zinc-400 tablet:text-base">
-            Agrupa servicios (ej. Juegos, Cosméticos) para organizar el catálogo.
-          </p>
+        <div className="flex items-start gap-3">
+          <span
+            className="mt-1 h-10 w-1 shrink-0 rounded-full bg-emerald-500"
+            aria-hidden
+          />
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 tablet:text-3xl">
+              Categorías
+            </h1>
+            <p className="mt-1.5 text-sm text-zinc-600 dark:text-zinc-400 tablet:text-base">
+              Agrupa servicios (ej. Juegos, Cosméticos) para organizar el catálogo.
+              {categories.length > 0 ? (
+                <>
+                  {" "}
+                  <span className="font-medium text-emerald-700 dark:text-emerald-400">
+                    {categories.length}{" "}
+                    {categories.length === 1 ? "categoría" : "categorías"}
+                  </span>
+                </>
+              ) : null}
+            </p>
+          </div>
         </div>
         {canCreate && (
         <button
@@ -190,14 +205,27 @@ export function CategoriesView({ initialCategories, fetchError }) {
       )}
 
       <div className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="border-b border-zinc-200/80 bg-zinc-50/50 px-4 py-3.5 dark:border-zinc-800 dark:bg-zinc-800/30 tablet:px-6">
-          <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+        <div className="border-b-2 border-emerald-500 bg-emerald-50/40 px-4 py-3.5 dark:bg-emerald-950/20 tablet:px-6">
+          <h2 className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
             Lista de categorías
           </h2>
         </div>
 
         {categories.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-5 px-4 py-20 text-center">
+            <div
+              className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+              aria-hidden
+            >
+              <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.75}
+                  d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"
+                />
+              </svg>
+            </div>
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
               Aún no hay categorías. Agrega tu primera categoría para comenzar.
             </p>
@@ -231,7 +259,7 @@ export function CategoriesView({ initialCategories, fetchError }) {
             {filteredCategories.map((category, index) => (
               <li
                 key={category.id}
-                className="flex flex-col gap-2 px-4 py-4 first:pt-4 last:pb-4 tablet:px-6"
+                className="flex flex-col gap-2 px-4 py-4 first:pt-4 last:pb-4 transition-colors hover:bg-emerald-50/40 dark:hover:bg-emerald-950/10 tablet:px-6"
               >
                 <div className="flex flex-col gap-0.5">
                   <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400" aria-hidden>
@@ -296,7 +324,7 @@ export function CategoriesView({ initialCategories, fetchError }) {
                 {filteredCategories.map((category, index) => (
                   <tr
                     key={category.id}
-                    className="border-b border-zinc-100 last:border-0 transition-colors hover:bg-zinc-50/50 dark:border-zinc-800 dark:hover:bg-zinc-800/30"
+                    className="border-b border-zinc-100 last:border-0 transition-colors hover:bg-emerald-50/40 dark:border-zinc-800 dark:hover:bg-emerald-950/10"
                   >
                     <td className="w-12 px-2 py-3.5 text-zinc-500 dark:text-zinc-400 tablet:px-4" aria-label={`Fila ${index + 1}`}>
                       {index + 1}

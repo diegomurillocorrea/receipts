@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useId, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -31,6 +31,30 @@ function displayName(user) {
   return meta.full_name ?? meta.name ?? user.email ?? "Usuario";
 }
 
+/**
+ * Initials from full name: "Diego Murillo" → "DM"
+ * @param {string | null | undefined} name
+ * @returns {string}
+ */
+function getInitials(name) {
+  if (!name) return "?";
+  const trimmed = name.trim();
+  if (!trimmed) return "?";
+
+  // Prefer name part before email domain if the display value is an email
+  const base = trimmed.includes("@") ? trimmed.split("@")[0] : trimmed;
+  const parts = base.split(/\s+/).filter(Boolean);
+
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+
+  const first = parts[0][0] ?? "";
+  const last = parts[parts.length - 1][0] ?? "";
+  return `${first}${last}`.toUpperCase();
+}
+
 function UserDisplay() {
   const user = useUser();
   const name = displayName(user);
@@ -55,6 +79,17 @@ const NAV_ITEMS = [
   { href: "/roles", label: "Roles", resource: "roles" },
 ];
 
+const SIDEBAR_PATH_PREFIXES = NAV_ITEMS.map((item) => item.href);
+
+function usesHomeShell(pathname) {
+  if (pathname === "/") return true;
+  const segments = pathname.split("/").filter(Boolean);
+  if (segments.length === 0) return false;
+  if (SIDEBAR_PATH_PREFIXES.includes(`/${segments[0]}`)) return false;
+  // Home-style shell for /[serviceId] search and /[serviceId]/[billId] register/edit
+  return segments.length === 1 || segments.length === 2;
+}
+
 function NavContent({ pathname, onNavClick, hideLogo, hideThemeToggle }) {
   const { can, isLoading } = usePermissions();
   const visibleItems = isLoading
@@ -75,7 +110,9 @@ function NavContent({ pathname, onNavClick, hideLogo, hideThemeToggle }) {
               height={56}
               className="h-12 w-12 shrink-0 object-contain"
             />
-            <span className="truncate text-xl font-bold tracking-tight">Receipts</span>
+            <span className="truncate text-xl font-bold tracking-tight text-emerald-700 dark:text-emerald-400">
+              Receipts
+            </span>
           </Link>
         </div>
       )}
@@ -91,7 +128,7 @@ function NavContent({ pathname, onNavClick, hideLogo, hideThemeToggle }) {
               onClick={onNavClick}
               className={`rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 dark:focus:ring-offset-zinc-900 ${
                 isActive
-                  ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+                  ? "bg-emerald-100 text-emerald-800 shadow-[inset_3px_0_0_0_#10b981] dark:bg-emerald-950/50 dark:text-emerald-300 dark:shadow-[inset_3px_0_0_0_#34d399]"
                   : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800/80 dark:hover:text-zinc-50"
               }`}
               aria-current={isActive ? "page" : undefined}
@@ -186,31 +223,95 @@ function SignOutButton() {
   );
 }
 
-function CompactSignOutButton() {
+function HomeUserMenu() {
+  const user = useUser();
   const router = useRouter();
+  const menuId = useId();
+  const containerRef = useRef(null);
+  const [isOpen, setIsOpen] = useState(false);
+
+  const name = displayName(user);
+  const initials = getInitials(name);
+
+  const handleClose = useCallback(() => setIsOpen(false), []);
+
+  const handleToggle = () => {
+    setIsOpen((prev) => !prev);
+  };
+
   const handleSignOut = useCallback(async () => {
+    setIsOpen(false);
     const supabase = createClient();
     await supabase.auth.signOut();
     router.refresh();
     router.push("/login");
   }, [router]);
 
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const handlePointerDown = (event) => {
+      if (!containerRef.current?.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
+
   return (
-    <button
-      type="button"
-      onClick={handleSignOut}
-      className="flex h-10 w-10 items-center justify-center rounded-xl text-zinc-600 transition-colors hover:bg-zinc-200 hover:text-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50 dark:focus:ring-offset-zinc-950"
-      aria-label="Cerrar sesión"
-    >
-      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-        />
-      </svg>
-    </button>
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={handleToggle}
+        className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-600 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 dark:bg-emerald-500 dark:hover:bg-emerald-400 dark:focus:ring-offset-zinc-950"
+        aria-label={name ? `Menú de usuario: ${name}` : "Menú de usuario"}
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        aria-controls={menuId}
+      >
+        <span aria-hidden>{initials}</span>
+      </button>
+
+      {isOpen ? (
+        <div
+          id={menuId}
+          role="menu"
+          aria-label="Opciones de usuario"
+          className="absolute right-0 top-full z-20 mt-2 w-48 overflow-hidden rounded-xl border border-zinc-200/80 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+        >
+          <Link
+            href="/payments"
+            role="menuitem"
+            tabIndex={0}
+            onClick={handleClose}
+            className="block px-4 py-2.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 hover:text-zinc-900 focus:bg-zinc-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-500/50 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:hover:text-zinc-50 dark:focus:bg-zinc-800"
+          >
+            Administración
+          </Link>
+          <button
+            type="button"
+            role="menuitem"
+            tabIndex={0}
+            onClick={handleSignOut}
+            className="block w-full px-4 py-2.5 text-left text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100 hover:text-zinc-900 focus:bg-zinc-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-emerald-500/50 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:hover:text-zinc-50 dark:focus:bg-zinc-800"
+          >
+            Cerrar sesión
+          </button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -220,7 +321,7 @@ export default function DashboardLayout({ children }) {
   const isMobile = breakpoint === "mobile";
   const isTablet = breakpoint === "tablet";
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const isHome = pathname === "/";
+  const isHome = usesHomeShell(pathname);
 
   const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
 
@@ -228,9 +329,11 @@ export default function DashboardLayout({ children }) {
     return (
       <PermissionsProvider>
         <div className="fixed inset-0 flex flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950">
-          <div className="absolute right-4 top-4 z-10 flex items-center gap-1">
+          <div className="absolute left-4 top-4 z-10">
             <MobileThemeToggle />
-            <CompactSignOutButton />
+          </div>
+          <div className="absolute right-4 top-4 z-10">
+            <HomeUserMenu />
           </div>
           <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
             <div className="flex w-full flex-1 flex-col px-4 py-4 tablet:px-6 desktop:px-8">
@@ -288,7 +391,9 @@ export default function DashboardLayout({ children }) {
                 height={40}
                 className="h-9 w-9 shrink-0 object-contain"
               />
-              <span className="truncate text-lg font-bold tracking-tight">Receipts</span>
+              <span className="truncate text-lg font-bold tracking-tight text-emerald-700 dark:text-emerald-400">
+                Receipts
+              </span>
             </Link>
           </div>
           <MobileThemeToggle />

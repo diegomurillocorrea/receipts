@@ -69,6 +69,10 @@ export async function proxy(request) {
   }
 
   if (!session && !isPublicPath(pathname)) {
+    // Route handlers return JSON errors (rather than an HTML login redirect) for API clients.
+    if (pathname.startsWith("/api/")) {
+      return response;
+    }
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     if (pathname !== "/") {

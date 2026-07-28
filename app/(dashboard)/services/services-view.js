@@ -216,14 +216,29 @@ export function ServicesView({ initialServices, initialCategories = [], fetchErr
   return (
     <div className="space-y-6 tablet:space-y-8">
       <header className="flex flex-col gap-4 tablet:flex-row tablet:items-center tablet:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 tablet:text-3xl">
-            Servicios
-          </h1>
-          <p className="mt-1.5 text-sm text-zinc-600 dark:text-zinc-400 tablet:text-base">
-            Tipos de recibos (ej. Agua, Electricidad, Internet). Agregar, editar o
-            eliminar servicios.
-          </p>
+        <div className="flex items-start gap-3">
+          <span
+            className="mt-1 h-10 w-1 shrink-0 rounded-full bg-emerald-500"
+            aria-hidden
+          />
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 tablet:text-3xl">
+              Servicios
+            </h1>
+            <p className="mt-1.5 text-sm text-zinc-600 dark:text-zinc-400 tablet:text-base">
+              Tipos de recibos (ej. Agua, Electricidad, Internet). Agregar, editar o
+              eliminar servicios.
+              {services.length > 0 ? (
+                <>
+                  {" "}
+                  <span className="font-medium text-emerald-700 dark:text-emerald-400">
+                    {services.length}{" "}
+                    {services.length === 1 ? "servicio" : "servicios"}
+                  </span>
+                </>
+              ) : null}
+            </p>
+          </div>
         </div>
         {canCreate && (
         <button
@@ -278,14 +293,27 @@ export function ServicesView({ initialServices, initialCategories = [], fetchErr
       )}
 
       <div className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="border-b border-zinc-200/80 bg-zinc-50/50 px-4 py-3.5 dark:border-zinc-800 dark:bg-zinc-800/30 tablet:px-6">
-          <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+        <div className="border-b-2 border-emerald-500 bg-emerald-50/40 px-4 py-3.5 dark:bg-emerald-950/20 tablet:px-6">
+          <h2 className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
             Lista de servicios
           </h2>
         </div>
 
         {services.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-5 px-4 py-20 text-center">
+            <div
+              className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+              aria-hidden
+            >
+              <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.75}
+                  d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+                />
+              </svg>
+            </div>
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
               Aún no hay servicios. Agrega tu primer servicio (ej. Agua, Electricidad,
               Internet) para comenzar.
@@ -320,7 +348,7 @@ export function ServicesView({ initialServices, initialCategories = [], fetchErr
             {filteredServices.map((service, index) => (
               <li
                 key={service.id}
-                className="flex flex-col gap-2 py-4 first:pt-4 last:pb-4"
+                className="flex flex-col gap-2 py-4 first:pt-4 last:pb-4 transition-colors hover:bg-emerald-50/40 dark:hover:bg-emerald-950/10"
               >
                 <div className="flex items-start gap-3">
                   {getServiceImageUrl(service) ? (
@@ -425,7 +453,7 @@ export function ServicesView({ initialServices, initialCategories = [], fetchErr
                 {filteredServices.map((service, index) => (
                   <tr
                     key={service.id}
-                    className="border-b border-zinc-100 last:border-0 transition-colors hover:bg-zinc-50/50 dark:border-zinc-800 dark:hover:bg-zinc-800/30"
+                    className="border-b border-zinc-100 last:border-0 transition-colors hover:bg-emerald-50/40 dark:border-zinc-800 dark:hover:bg-emerald-950/10"
                   >
                     <td className="w-12 px-2 py-3.5 text-zinc-500 dark:text-zinc-400 tablet:px-4" aria-label={`Fila ${index + 1}`}>
                       {index + 1}

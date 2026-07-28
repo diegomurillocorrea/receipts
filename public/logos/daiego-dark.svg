@@ -1,0 +1,17 @@
+<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+    <rect width="120" height="120" fill="#000000" />
+
+    <g transform="translate(7.5, 22.5)">
+        <rect x="0" y="0" width="105" height="75" fill="none" stroke="#ffffff" stroke-width="5" rx="4" />
+
+        <g fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="square" stroke-linejoin="miter">
+            <path d="M 12,12 H 32 V 32 H 12 Z" />
+            <path d="M 42,32 V 12 H 62 V 32 M 42,22 H 62" />
+            <path d="M 82,12 V 32 M 74,12 H 90 M 74,32 H 90" />
+
+            <path d="M 12,43 V 63 M 12,43 H 32 M 12,53 H 26 M 12,63 H 32" />
+            <path d="M 62,43 H 42 V 63 H 62 V 53 H 52" />
+            <path d="M 74,43 H 90 V 63 H 74 Z" />
+        </g>
+    </g>
+</svg>

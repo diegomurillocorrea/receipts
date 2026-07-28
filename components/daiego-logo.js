@@ -1,6 +1,5 @@
-import Image from "next/image"
-
-const LOGO_SRC = "/DAIEGO.png"
+const LOGO_LIGHT_SRC = "/logos/daiego-light.svg"
+const LOGO_DARK_SRC = "/logos/daiego-dark.svg"
 
 export function DaiegoLogo({
   className = "",
@@ -8,14 +7,28 @@ export function DaiegoLogo({
   height = 54,
   priority = false,
 }) {
+  const sharedProps = {
+    alt: "DAIEGO",
+    width,
+    height,
+    decoding: "async",
+    ...(priority ? { fetchPriority: "high" } : {}),
+  }
+
   return (
-    <Image
-      src={LOGO_SRC}
-      alt="DAIEGO"
-      width={width}
-      height={height}
-      className={`object-contain ${className}`}
-      priority={priority}
-    />
+    <span className={`relative inline-flex shrink-0 ${className}`}>
+      <img
+        {...sharedProps}
+        src={LOGO_LIGHT_SRC}
+        className="h-full w-full object-contain dark:hidden"
+      />
+      <img
+        {...sharedProps}
+        src={LOGO_DARK_SRC}
+        alt=""
+        className="hidden h-full w-full object-contain dark:block"
+        aria-hidden
+      />
+    </span>
   )
 }

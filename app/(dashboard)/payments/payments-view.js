@@ -2,64 +2,18 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useCallback, useEffect, useRef } from "react";
-import { Pencil, Trash2, Eye, FileText, Upload, Info } from "lucide-react";
+import { Copy, LoaderCircle, MessageCircleMore, Pencil, Trash2 } from "lucide-react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
+import { deletePaymentAction } from "./actions";
 import {
-  createPaymentAction,
-  updatePaymentAction,
-  deletePaymentAction,
-  searchReceiptsForPaymentAction,
-  uploadPaymentProofAction,
-  removePaymentProofAction,
-  getPaymentProofUrlAction,
-  getServicesForConsultaAction,
-} from "./actions";
-import {
-  PAYMENT_STATUS_PENDING,
+  PAYMENT_STATUS_REGISTERED,
   PAYMENT_STATUS_PAID,
-  STATUS_LABELS,
+  PAYMENT_STATUS_CANCELLED,
+  PAYMENT_STATUS_SENT,
+  normalizePaymentStatus,
+  getPaymentStatusLabel,
 } from "./constants";
 import { usePermissions } from "../permissions-provider";
-
-function getStatusLabel(status) {
-  if (status === PAYMENT_STATUS_PAID) return STATUS_LABELS[PAYMENT_STATUS_PAID];
-  return STATUS_LABELS[PAYMENT_STATUS_PENDING];
-}
-
-function getProofPublicUrl(payment) {
-  if (!payment?.proof_bucket || !payment?.proof_path) return null;
-  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!base) return null;
-  return `${base}/storage/v1/object/public/${payment.proof_bucket}/${payment.proof_path}`;
-}
-
-/** Id del método "efectivo" para usarlo como valor por defecto del formulario */
-function getDefaultPaymentMethodId(methods) {
-  const list = methods ?? [];
-  const efectivo = list.find(
-    (m) => (m?.name ?? "").trim().toLowerCase() === "efectivo"
-  );
-  return efectivo?.id ?? "";
-}
-
-const MONTHS_ES = [
-  "ene", "feb", "mar", "abr", "may", "jun",
-  "jul", "ago", "sep", "oct", "nov", "dic",
-];
-
-function formatDate(isoString) {
-  if (!isoString) return "—";
-  const d = new Date(isoString);
-  const day = d.getDate();
-  const month = MONTHS_ES[d.getMonth()];
-  const year = d.getFullYear();
-  let h = d.getHours();
-  const m = d.getMinutes();
-  const ampm = h >= 12 ? "p." : "a.";
-  h = h % 12 || 12;
-  const min = m < 10 ? `0${m}` : String(m);
-  return `${day} ${month} ${year}, ${h}:${min} ${ampm} m.`;
-}
 
 function formatAmount(value) {
   if (value == null || value === "") return "—";
@@ -71,45 +25,75 @@ function formatAmount(value) {
   }).format(n);
 }
 
-/** Supabase puede devolver el join `receipts` como objeto o como array de una fila */
+/** Format: dd/mm/aa - h:mm a.m.|p.m. (12h) */
+function formatPaymentDateHour(isoString) {
+  if (!isoString) return "—";
+  const d = new Date(isoString);
+  if (Number.isNaN(d.getTime())) return "—";
+
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const aa = String(d.getFullYear()).slice(-2);
+
+  const hours24 = d.getHours();
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  const isPm = hours24 >= 12;
+  const hours12 = hours24 % 12 || 12;
+  const meridiem = isPm ? "p.m." : "a.m.";
+
+  return `${dd}/${mm}/${aa} - ${hours12}:${minutes} ${meridiem}`;
+}
+
 function normalizeReceiptRef(receipt) {
   if (!receipt) return null;
   if (Array.isArray(receipt)) return receipt[0] ?? null;
   return receipt;
 }
 
-function getServiceNamesSearchText(receipt) {
-  const r = normalizeReceiptRef(receipt);
-  if (!r) return "";
-  const service = r.services ?? r.service;
-  if (Array.isArray(service)) {
-    return service
-      .map((s) => (s?.name ?? "").trim())
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-  }
-  return (service?.name ?? "").trim().toLowerCase();
+function normalizeClient(client) {
+  if (!client) return null;
+  if (Array.isArray(client)) return client[0] ?? null;
+  return client;
+}
+
+function getClientDisplayName(client) {
+  const c = normalizeClient(client);
+  if (!c) return "—";
+  const fullName = [c.name, c.last_name].filter(Boolean).join(" ").trim();
+  return fullName || "—";
 }
 
 function getReceiptLabel(receipt) {
   const r = normalizeReceiptRef(receipt);
   if (!r) return "";
-  const client = r.clients ?? r.client;
+  const clientName = getClientDisplayName(r.clients ?? r.client);
   const service = r.services ?? r.service;
   const svc = Array.isArray(service) ? service[0] : service;
-  const clientName =
-    client && (client.name || client.last_name)
-      ? [client.name, client.last_name].filter(Boolean).join(" ")
-      : "—";
   const serviceName = svc?.name ?? "—";
   const account = r.account_receipt_number ?? "";
   return `${clientName} · ${serviceName}${account ? ` (${account})` : ""}`;
 }
 
 function getPaymentReceiptDisplay(payment) {
-  const receipt = payment.receipt ?? payment.receipts;
-  return getReceiptLabel(receipt);
+  return getReceiptLabel(payment.receipt ?? payment.receipts);
+}
+
+function getPaymentClientName(payment) {
+  const receipt = normalizeReceiptRef(payment.receipt ?? payment.receipts);
+  return getClientDisplayName(receipt?.clients ?? receipt?.client);
+}
+
+function getPaymentAccountNumber(payment) {
+  const receipt = normalizeReceiptRef(payment.receipt ?? payment.receipts);
+  return (receipt?.account_receipt_number ?? "").trim();
+}
+
+function getPaymentServiceId(payment) {
+  const receipt = normalizeReceiptRef(payment.receipt ?? payment.receipts);
+  if (!receipt) return null;
+  const service = receipt.services ?? receipt.service;
+  const svc = Array.isArray(service) ? service[0] : service;
+  return svc?.id ?? null;
 }
 
 function getPaymentServiceImageUrl(payment) {
@@ -123,26 +107,19 @@ function getPaymentServiceImageUrl(payment) {
   return `${base}/storage/v1/object/public/${svc.image_bucket}/${svc.image_path}`;
 }
 
-function getServiceImageUrlDirect(service) {
-  if (!service?.image_bucket || !service?.image_path) return null;
-  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  if (!base) return null;
-  return `${base}/storage/v1/object/public/${service.image_bucket}/${service.image_path}`;
-}
-
-function ServiceImageThumb({ url, size = "h-9 w-9" }) {
+function ServiceImageThumb({ url, size = "h-9 w-9", rounded = "rounded-lg" }) {
   if (url) {
     return (
       <img
         src={url}
-        alt="Imagen del servicio"
-        className={`${size} shrink-0 rounded-lg border border-zinc-200 object-cover dark:border-zinc-700`}
+        alt=""
+        className={`${size} shrink-0 ${rounded} border border-zinc-200 object-contain bg-white dark:border-zinc-700 dark:bg-zinc-800`}
       />
     );
   }
   return (
     <div
-      className={`${size} flex shrink-0 items-center justify-center rounded-lg border border-dashed border-zinc-300 text-zinc-400 dark:border-zinc-700 dark:text-zinc-600`}
+      className={`${size} flex shrink-0 items-center justify-center ${rounded} border border-dashed border-zinc-300 text-zinc-400 dark:border-zinc-700 dark:text-zinc-600`}
       aria-hidden
     >
       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -152,194 +129,264 @@ function ServiceImageThumb({ url, size = "h-9 w-9" }) {
   );
 }
 
-function getPaymentMethodName(payment) {
-  const method = payment.payment_methods;
-  return method?.name ?? "—";
+function getStatusBadgeClass(status) {
+  switch (normalizePaymentStatus(status)) {
+    case PAYMENT_STATUS_PAID:
+      return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300";
+    case PAYMENT_STATUS_CANCELLED:
+      return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300";
+    case PAYMENT_STATUS_SENT:
+      return "bg-pink-100 text-pink-800 dark:bg-pink-900/40 dark:text-pink-300";
+    case PAYMENT_STATUS_REGISTERED:
+    default:
+      return "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300";
+  }
 }
 
-/**
- * Varias palabras: cada término debe aparecer en algún campo (p. ej. "miguel free" coincide con
- * cliente + servicio aunque no exista la frase exacta "miguel free" seguida).
- */
-function paymentMatchesHistoryQuery(rawQuery, fieldParts) {
-  const q = rawQuery.trim().toLowerCase();
-  if (!q) return true;
-  const tokens = q.split(/\s+/).filter(Boolean);
-  if (tokens.length === 0) return true;
-  const haystack = fieldParts
-    .filter((s) => s != null && String(s).trim() !== "")
-    .map((s) => String(s).toLowerCase())
-    .join(" ");
-  return tokens.every((token) => haystack.includes(token));
+function isPaidStatus(status) {
+  return normalizePaymentStatus(status) === PAYMENT_STATUS_PAID;
 }
 
-/**
- * Commission/costo por servicio calculado según regla del backend.
- * Comisión por total_amount: $0.50 -> $0.25; $1 -> $0.50; >$1 y <$50 -> $1; >=$50 y <$100 -> $2; etc.
- */
-function computeServiceFee(totalAmount) {
-  const n = Number(totalAmount);
-  if (Number.isNaN(n) || n < 0) return 0;
-  if (n === 0) return 0;
-  if (n === 0.5) return 0.25;
-  if (n === 1) return 0.5;
-  if (n < 50) return 1;
-  return Math.floor(n / 50) + 1;
+function StatusBadge({ status }) {
+  const label = getPaymentStatusLabel(status);
+  return (
+    <span
+      className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${getStatusBadgeClass(status)}`}
+      aria-label={`Estado: ${label}`}
+    >
+      {label}
+    </span>
+  );
 }
 
-const SEARCH_DEBOUNCE_MS = 300;
-const MIN_SEARCH_LENGTH = 2;
+const actionIconBaseClass =
+  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 disabled:cursor-not-allowed disabled:opacity-50";
+
+function ActionIconButton({
+  label,
+  onClick,
+  disabled,
+  tone = "muted",
+  children,
+}) {
+  const toneClass =
+    tone === "danger"
+      ? "text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/40"
+      : tone === "primary"
+        ? "text-emerald-700 hover:bg-emerald-100 dark:text-emerald-400 dark:hover:bg-emerald-900/40"
+        : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800";
+
+  return (
+    <span className="group relative inline-flex">
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        className={`${actionIconBaseClass} ${toneClass}`}
+        aria-label={label}
+      >
+        {children}
+      </button>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-zinc-900 px-2.5 py-1 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 dark:bg-zinc-100 dark:text-zinc-900"
+      >
+        {label}
+      </span>
+    </span>
+  );
+}
+
+function CopyIconButton({ value, label, onCopied, onError }) {
+  const handleClick = async () => {
+    const text = (value ?? "").trim();
+    if (!text || text === "—") {
+      onError?.("No hay texto para copiar.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      onCopied?.(label);
+    } catch {
+      onError?.("No se pudo copiar.");
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-emerald-50 hover:text-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-300"
+      aria-label={label}
+      title={label}
+    >
+      <Copy className="h-3.5 w-3.5" aria-hidden />
+    </button>
+  );
+}
+
+function PaymentActions({
+  payment,
+  canEdit,
+  canDelete,
+  onEdit,
+  onDelete,
+  onSendWhatsAppConfirmation,
+  sendingWhatsAppPaymentIds,
+}) {
+  const items = [];
+
+  if (canEdit) {
+    items.push({
+      id: "edit",
+      node: (
+        <ActionIconButton
+          label="Editar"
+          tone="primary"
+          onClick={() => onEdit(payment)}
+        >
+          <Pencil className="h-4 w-4" aria-hidden />
+        </ActionIconButton>
+      ),
+    });
+  }
+
+  if (canDelete) {
+    items.push({
+      id: "delete",
+      node: (
+        <ActionIconButton
+          label="Eliminar"
+          tone="danger"
+          onClick={() => onDelete(payment)}
+        >
+          <Trash2 className="h-4 w-4" aria-hidden />
+        </ActionIconButton>
+      ),
+    });
+  }
+
+  const isSendingWhatsApp = sendingWhatsAppPaymentIds.has(payment.id);
+  items.push({
+    id: "whatsapp-confirmation",
+    node: (
+      <ActionIconButton
+        label="Enviar confirmación de pago por WhatsApp"
+        tone="primary"
+        disabled={isSendingWhatsApp}
+        onClick={() => onSendWhatsAppConfirmation(payment)}
+      >
+        {isSendingWhatsApp ? (
+          <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
+        ) : (
+          <MessageCircleMore className="h-4 w-4" aria-hidden />
+        )}
+      </ActionIconButton>
+    ),
+  });
+
+  if (items.length === 0) {
+    return <span className="text-sm text-zinc-400 dark:text-zinc-500">—</span>;
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      {items.map((item) => (
+        <span key={item.id} className="inline-flex">
+          {item.node}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function ServicioCell({ payment, onCopied, onCopyError }) {
+  const clientName = getPaymentClientName(payment);
+  const accountNumber = getPaymentAccountNumber(payment) || "—";
+  const imageUrl = getPaymentServiceImageUrl(payment);
+
+  return (
+    <div className="flex min-w-0 items-start gap-3 text-left">
+      <ServiceImageThumb
+        url={imageUrl}
+        size="h-11 w-11"
+        rounded="rounded-full"
+      />
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex min-w-0 items-center gap-1">
+          <p className="min-w-0 truncate text-sm text-zinc-900 dark:text-zinc-50">
+            <span className="font-medium text-zinc-500 dark:text-zinc-400">
+              Cliente:{" "}
+            </span>
+            {clientName}
+          </p>
+          <CopyIconButton
+            value={clientName}
+            label="Copiar nombre del cliente"
+            onCopied={onCopied}
+            onError={onCopyError}
+          />
+        </div>
+        <div className="flex min-w-0 items-center gap-1">
+          <p className="min-w-0 truncate text-sm text-zinc-900 dark:text-zinc-50">
+            <span className="font-medium text-zinc-500 dark:text-zinc-400">
+              ID Servicio:{" "}
+            </span>
+            {accountNumber}
+          </p>
+          <CopyIconButton
+            value={accountNumber}
+            label="Copiar ID de servicio"
+            onCopied={onCopied}
+            onError={onCopyError}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function PaymentsView({ initialPayments, initialPaymentMethods, fetchError }) {
   const router = useRouter();
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === "mobile";
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [selectedReceipt, setSelectedReceipt] = useState(null);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState(() =>
-    getDefaultPaymentMethodId(initialPaymentMethods)
-  );
-  const [selectedStatus, setSelectedStatus] = useState(PAYMENT_STATUS_PENDING);
-  const [includeCommission, setIncludeCommission] = useState(true);
-  const [customCommission, setCustomCommission] = useState("");
-  const [amount, setAmount] = useState("");
-  const [createdAt, setCreatedAt] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  });
-  const [formError, setFormError] = useState(null);
-  const [proofUploadingId, setProofUploadingId] = useState(null);
-  const [proofRemovingId, setProofRemovingId] = useState(null);
-  const [proofError, setProofError] = useState(null);
-  const [proofPreviewPayment, setProofPreviewPayment] = useState(null);
-  const [proofPreviewImageUrl, setProofPreviewImageUrl] = useState(null);
-  const [proofPreviewLoading, setProofPreviewLoading] = useState(false);
-  const [proofPreviewError, setProofPreviewError] = useState(null);
-  const [proofUploadModalPayment, setProofUploadModalPayment] = useState(null);
-  const proofFileInputRef = useRef(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [editingPayment, setEditingPayment] = useState(null);
+
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
-  const [commissionInfoOpen, setCommissionInfoOpen] = useState(false);
-  const [dateFilter, setDateFilter] = useState("daily");
-  const [selectedDate, setSelectedDate] = useState(() => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-});
-  const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState(null);
+  const [whatsAppFeedback, setWhatsAppFeedback] = useState(null);
+  const [sendingWhatsAppPaymentIds, setSendingWhatsAppPaymentIds] = useState(
+    () => new Set()
+  );
+  const sendingWhatsAppPaymentIdsRef = useRef(new Set());
+
   const { can } = usePermissions();
-  const canSeeEstado = can("payments", "view_status");
-  const canSeeProofActions = can("payments", "manage_proof");
-  const canCreatePayment = can("payments", "create");
   const canEditPaymentPerm = can("payments", "edit");
   const canDeletePayment = can("payments", "delete");
-  const [consultaOpen, setConsultaOpen] = useState(false);
-  const [consultaServices, setConsultaServices] = useState([]);
-  const [consultaLoading, setConsultaLoading] = useState(false);
-  const [consultaError, setConsultaError] = useState(null);
-  const searchTimeoutRef = useRef(null);
-  const comboboxRef = useRef(null);
-  const filterDropdownRef = useRef(null);
-  const paymentMethods = initialPaymentMethods ?? [];
 
-  const runSearch = useCallback(async (query) => {
-    const q = (query ?? "").trim();
-    if (q.length < MIN_SEARCH_LENGTH) {
-      setSearchResults([]);
-      return;
-    }
-    setSearchLoading(true);
-    const result = await searchReceiptsForPaymentAction(q);
-    setSearchLoading(false);
-    if (result.error) {
-      setSearchResults([]);
-      return;
-    }
-    setSearchResults(result.receipts ?? []);
-  }, []);
+  const payments = initialPayments ?? [];
 
   useEffect(() => {
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    const q = searchQuery.trim();
-    if (q.length < MIN_SEARCH_LENGTH) {
-      setSearchResults([]);
-      return;
-    }
-    searchTimeoutRef.current = setTimeout(() => runSearch(searchQuery), SEARCH_DEBOUNCE_MS);
-    return () => {
-      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    };
-  }, [searchQuery, runSearch]);
+    if (!copyFeedback && !whatsAppFeedback) return;
+    const timer = setTimeout(() => {
+      setCopyFeedback(null);
+      setWhatsAppFeedback(null);
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [copyFeedback, whatsAppFeedback]);
 
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (comboboxRef.current && !comboboxRef.current.contains(event.target)) {
-        setDropdownOpen(false);
-      }
-      if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target)) {
-        setFilterDropdownOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const handleSelectReceipt = useCallback((receipt) => {
-    setSelectedReceipt({ id: receipt.id, label: getReceiptLabel(receipt) });
-    setSearchQuery("");
-    setSearchResults([]);
-    setDropdownOpen(false);
-  }, []);
-
-  const handleClearReceipt = useCallback(() => {
-    setSelectedReceipt(null);
-    setSearchQuery("");
-    setSearchResults([]);
-  }, []);
-
-  const formatCreatedAtForInput = useCallback((isoString) => {
-    if (!isoString) return "";
-    const d = new Date(isoString);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  }, []);
-
-  const handleEditPayment = useCallback((payment) => {
-    const receipt = payment.receipt ?? payment.receipts;
-    setEditingPayment(payment);
-    setSelectedReceipt({ id: payment.receipt_id, label: getReceiptLabel(receipt) });
-    setAmount(String(payment.total_amount));
-    setSelectedPaymentMethod(payment.payment_method_id ?? "");
-    setSelectedStatus(
-      payment.status === PAYMENT_STATUS_PAID ? PAYMENT_STATUS_PAID : PAYMENT_STATUS_PENDING
-    );
-    setCreatedAt(formatCreatedAtForInput(payment.created_at) || (() => {
-      const d = new Date();
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-    })());
-    const expectedFee = computeServiceFee(Number(payment.total_amount));
-    const storedCommission = Number(payment.commission) || 0;
-    setIncludeCommission(storedCommission !== 0 || expectedFee === 0);
-    setCustomCommission(storedCommission !== expectedFee ? String(storedCommission) : "");
-    setFormError(null);
-  }, [formatCreatedAtForInput]);
-
-  const handleCancelEdit = useCallback(() => {
-    setEditingPayment(null);
-    setSelectedReceipt(null);
-    setAmount("");
-    setSelectedPaymentMethod(getDefaultPaymentMethodId(initialPaymentMethods));
-    setSelectedStatus(PAYMENT_STATUS_PENDING);
-    setIncludeCommission(true);
-    setCustomCommission("");
-    const d = new Date();
-    setCreatedAt(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
-    setFormError(null);
-  }, [initialPaymentMethods]);
+  const handleEditPayment = useCallback(
+    (payment) => {
+      const serviceId = getPaymentServiceId(payment);
+      const account = getPaymentAccountNumber(payment);
+      if (!serviceId || !account || !payment?.id) return;
+      router.push(
+        `/${serviceId}/${encodeURIComponent(account)}?paymentId=${payment.id}`
+      );
+    },
+    [router]
+  );
 
   const handleDeleteClick = useCallback((payment) => {
     setDeleteTarget(payment);
@@ -365,307 +412,104 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
     setDeleteError(null);
   }, []);
 
-  const handleProofPreview = useCallback((payment) => {
-    if (!payment?.id || !getProofPublicUrl(payment)) return;
-    setProofPreviewPayment(payment);
-    setProofPreviewImageUrl(null);
-    setProofPreviewError(null);
-    setProofPreviewLoading(true);
-  }, []);
+  const handleSendWhatsAppConfirmation = useCallback(
+    async (payment) => {
+      const paymentId = payment?.id;
+      if (!paymentId || sendingWhatsAppPaymentIdsRef.current.has(paymentId)) return;
 
-  useEffect(() => {
-    if (!proofPreviewPayment?.id || !proofPreviewLoading) return;
-    let cancelled = false;
-    (async () => {
-      const result = await getPaymentProofUrlAction(proofPreviewPayment.id);
-      if (cancelled) return;
-      setProofPreviewLoading(false);
-      if (result.error) {
-        setProofPreviewError(result.error);
-        return;
-      }
-      setProofPreviewImageUrl(result.url ?? null);
-    })();
-    return () => { cancelled = true; };
-  }, [proofPreviewPayment?.id, proofPreviewLoading]);
+      sendingWhatsAppPaymentIdsRef.current.add(paymentId);
+      setSendingWhatsAppPaymentIds((current) => new Set(current).add(paymentId));
+      setWhatsAppFeedback(null);
 
-  const handleProofPreviewClose = useCallback(() => {
-    setProofPreviewPayment(null);
-    setProofPreviewImageUrl(null);
-    setProofPreviewError(null);
-    setProofPreviewLoading(false);
-  }, []);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 20_000);
 
-  const handleProofUploadOpen = useCallback((payment) => {
-    setProofUploadModalPayment(payment);
-    setProofError(null);
-    if (proofFileInputRef.current) proofFileInputRef.current.value = "";
-  }, []);
-
-  const handleProofUploadClose = useCallback(() => {
-    setProofUploadModalPayment(null);
-    setProofError(null);
-  }, []);
-
-  const handleProofUploadSubmit = async (e) => {
-    e.preventDefault();
-    if (!proofUploadModalPayment) return;
-    const input = proofFileInputRef.current;
-    if (!input?.files?.length) {
-      setProofError("Selecciona una imagen.");
-      return;
-    }
-    const formData = new FormData();
-    formData.set("proof", input.files[0]);
-    setProofUploadingId(proofUploadModalPayment.id);
-    setProofError(null);
-    const result = await uploadPaymentProofAction(proofUploadModalPayment.id, formData);
-    setProofUploadingId(null);
-    if (result.error) {
-      setProofError(result.error);
-      return;
-    }
-    if (editingPayment?.id === proofUploadModalPayment.id && result.proof_path != null) {
-      setEditingPayment((prev) =>
-        prev ? { ...prev, proof_bucket: result.proof_bucket ?? null, proof_path: result.proof_path } : null
-      );
-    }
-    setProofUploadModalPayment(null);
-    router.refresh();
-  };
-
-  const handleProofRemove = useCallback(async (payment) => {
-    if (!payment?.id) return;
-    setProofRemovingId(payment.id);
-    setProofError(null);
-    const result = await removePaymentProofAction(payment.id);
-    setProofRemovingId(null);
-    if (result.error) {
-      setProofError(result.error);
-      return;
-    }
-    if (editingPayment?.id === payment.id) {
-      setEditingPayment((prev) => (prev ? { ...prev, proof_bucket: null, proof_path: null } : null));
-    }
-    router.refresh();
-  }, [editingPayment?.id]);
-
-  const getFilteredPayments = useCallback(() => {
-    const [year, month, day] = selectedDate.split("-").map(Number);
-    const referenceDate = new Date(year, month - 1, day);
-    
-    return initialPayments.filter((payment) => {
-      const paymentDate = new Date(payment.created_at);
-      
-      switch (dateFilter) {
-        case "daily": {
-          const paymentDay = new Date(paymentDate.getFullYear(), paymentDate.getMonth(), paymentDate.getDate());
-          const selectedDay = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
-          return paymentDay.getTime() === selectedDay.getTime();
-        }
-        case "weekly": {
-          const selectedDayStart = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
-          const dayOfWeek = selectedDayStart.getDay();
-          const weekStart = new Date(selectedDayStart);
-          weekStart.setDate(weekStart.getDate() - dayOfWeek);
-          const weekEnd = new Date(weekStart);
-          weekEnd.setDate(weekEnd.getDate() + 6);
-          weekEnd.setHours(23, 59, 59, 999);
-          return paymentDate >= weekStart && paymentDate <= weekEnd;
-        }
-        case "monthly": {
-          return paymentDate.getMonth() === referenceDate.getMonth() && 
-                 paymentDate.getFullYear() === referenceDate.getFullYear();
-        }
-        case "yearly": {
-          return paymentDate.getFullYear() === referenceDate.getFullYear();
-        }
-        default:
-          return true;
-      }
-    });
-  }, [initialPayments, dateFilter, selectedDate]);
-
-  const payments = getFilteredPayments();
-
-  const [historySearch, setHistorySearch] = useState("");
-
-  const filteredPayments = historySearch.trim()
-    ? payments.filter((payment) => {
-        const receiptText = getPaymentReceiptDisplay(payment);
-        const serviceText = getServiceNamesSearchText(
-          payment.receipt ?? payment.receipts
+      try {
+        const response = await fetch(
+          `/api/payments/${encodeURIComponent(paymentId)}/send-whatsapp`,
+          {
+            method: "POST",
+            cache: "no-store",
+            signal: controller.signal,
+          }
         );
-        const amountText = String(payment.total_amount ?? "");
-        const amountFormatted = formatAmount(payment.total_amount);
-        const dateText = formatDate(payment.created_at);
-        const methodText = getPaymentMethodName(payment);
-        return paymentMatchesHistoryQuery(historySearch.trim(), [
-          receiptText,
-          serviceText,
-          amountText,
-          amountFormatted,
-          dateText,
-          methodText,
-        ]);
-      })
-    : payments;
+        const result = await response.json().catch(() => null);
 
-  const getTotalAmount = useCallback(() => {
-    return filteredPayments.reduce((sum, payment) => sum + (Number(payment.total_amount) || 0), 0);
-  }, [filteredPayments]);
+        if (!response.ok || !result?.success) {
+          throw new Error(
+            result?.error ?? "No se pudo enviar la confirmación por WhatsApp."
+          );
+        }
 
-  const getTotalCommission = useCallback(() => {
-    return filteredPayments.reduce((sum, payment) => sum + (Number(payment.commission) || 0), 0);
-  }, [filteredPayments]);
+        setWhatsAppFeedback({
+          type: "success",
+          message:
+            "Confirmación de pago por WhatsApp enviada a Meta correctamente.",
+        });
+        router.refresh();
+      } catch (error) {
+        const message =
+          error?.name === "AbortError"
+            ? "El envío tardó demasiado. Revisa el estado antes de volver a intentarlo."
+            : error instanceof Error
+              ? error.message
+              : "No se pudo enviar la confirmación por WhatsApp.";
+        setWhatsAppFeedback({ type: "error", message });
+      } finally {
+        clearTimeout(timeout);
+        sendingWhatsAppPaymentIdsRef.current.delete(paymentId);
+        setSendingWhatsAppPaymentIds((current) => {
+          const next = new Set(current);
+          next.delete(paymentId);
+          return next;
+        });
+      }
+    },
+    [router]
+  );
 
-  const getFilterLabel = () => {
-    switch (dateFilter) {
-      case "daily":
-        return "Diario";
-      case "weekly":
-        return "Semanal";
-      case "monthly":
-        return "Mensual";
-      case "yearly":
-        return "Anual";
-      default:
-        return "Diario";
-    }
-  };
-
-  const formatSelectedDate = () => {
-    const date = new Date(selectedDate);
-    const day = date.getDate();
-    const months = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-    const month = months[date.getMonth()];
-    const year = date.getFullYear();
-    return `${day} ${month} ${year}`;
-  };
-
-  const handleToggleIncludeCommission = useCallback(() => {
-    setIncludeCommission((prev) => !prev);
+  const handleCopied = useCallback((label) => {
+    setCopyFeedback(
+      label.includes("cliente") ? "Nombre copiado" : "ID de servicio copiado"
+    );
   }, []);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setFormError(null);
-    const total_amount = amount.trim() === "" ? NaN : Number(amount);
-    if (!selectedReceipt?.id) {
-      setFormError("Busca y selecciona un recibo (cuenta de cliente).");
-      return;
-    }
-    if (Number.isNaN(total_amount) || total_amount < 0) {
-      setFormError("Ingresa un monto válido (0 o mayor).");
-      return;
-    }
-    if (!selectedPaymentMethod) {
-      setFormError("Selecciona un método de pago.");
-      return;
-    }
-    const parsedCustomCommission =
-      !includeCommission || customCommission.trim() === ""
-        ? null
-        : Number(customCommission);
-    if (
-      parsedCustomCommission != null &&
-      (Number.isNaN(parsedCustomCommission) || parsedCustomCommission < 0)
-    ) {
-      setFormError("La comisión personalizada debe ser 0 o mayor.");
-      return;
-    }
-    setIsSubmitting(true);
-    
-    const created_at_iso = (() => {
-      if (!createdAt) return null;
-      const now = new Date();
-      const [year, month, day] = createdAt.split("-").map(Number);
-      return new Date(year, month - 1, day, now.getHours(), now.getMinutes(), now.getSeconds()).toISOString();
-    })();
+  const handleCopyError = useCallback((message) => {
+    setCopyFeedback(message);
+  }, []);
 
-    let result;
-    if (editingPayment) {
-      result = await updatePaymentAction(editingPayment.id, {
-        receipt_id: selectedReceipt.id,
-        total_amount,
-        payment_method_id: selectedPaymentMethod,
-        status: selectedStatus,
-        created_at: created_at_iso,
-        add_commission: includeCommission,
-        custom_commission: parsedCustomCommission,
-      });
-    } else {
-      result = await createPaymentAction({
-        receipt_id: selectedReceipt.id,
-        total_amount,
-        payment_method_id: selectedPaymentMethod,
-        status: selectedStatus,
-        created_at: created_at_iso,
-        add_commission: includeCommission,
-        custom_commission: parsedCustomCommission,
-      });
-    }
-    
-    setIsSubmitting(false);
-    if (result.error) {
-      setFormError(result.error);
-      return;
-    }
-    setEditingPayment(null);
-    setSelectedReceipt(null);
-    setAmount("");
-    setSelectedPaymentMethod(getDefaultPaymentMethodId(initialPaymentMethods));
-    setSelectedStatus(PAYMENT_STATUS_PENDING);
-    setIncludeCommission(true);
-    setCustomCommission("");
-    const d = new Date();
-    setCreatedAt(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
-    router.refresh();
+  const actionHandlers = {
+    canEdit: canEditPaymentPerm,
+    canDelete: canDeletePayment,
+    onEdit: handleEditPayment,
+    onDelete: handleDeleteClick,
+    onSendWhatsAppConfirmation: handleSendWhatsAppConfirmation,
+    sendingWhatsAppPaymentIds,
   };
-
-  const handleOpenConsulta = useCallback(async () => {
-    setConsultaOpen(true);
-    setConsultaError(null);
-    setConsultaLoading(true);
-    const result = await getServicesForConsultaAction();
-    setConsultaLoading(false);
-    if (result.error) {
-      setConsultaError(result.error);
-      return;
-    }
-    setConsultaServices(result.services ?? []);
-  }, []);
-
-  const handleCloseConsulta = useCallback(() => {
-    setConsultaOpen(false);
-    setConsultaError(null);
-  }, []);
-
-  const inputClass =
-    "w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-zinc-900 placeholder-zinc-400 transition-all duration-200 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-500 dark:focus:border-emerald-400 dark:focus:ring-emerald-500/30";
 
   return (
     <div className="space-y-6 tablet:space-y-8">
-      <header className="flex flex-row items-start justify-between gap-3">
+      <header className="flex items-start gap-3">
+        <span
+          className="mt-1 h-10 w-1 shrink-0 rounded-full bg-emerald-500"
+          aria-hidden
+        />
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 tablet:text-3xl">
             Pagos
           </h1>
           <p className="mt-1.5 text-sm text-zinc-600 dark:text-zinc-400 tablet:text-base">
-            Registrar pagos para cuentas de servicio de clientes (recibos).
+            Consulta y gestiona los pagos registrados.
+            {payments.length > 0 ? (
+              <>
+                {" "}
+                <span className="font-medium text-emerald-700 dark:text-emerald-400">
+                  {payments.length} {payments.length === 1 ? "pago" : "pagos"}
+                </span>
+              </>
+            ) : null}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={handleOpenConsulta}
-          className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-emerald-600 bg-white px-3 text-xs font-medium text-emerald-700 transition-all duration-200 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:border-emerald-500 dark:bg-zinc-900 dark:text-emerald-400 dark:hover:bg-emerald-950/40 dark:focus:ring-offset-zinc-900"
-          aria-label="Consultas de servicio"
-        >
-          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          Consultas de Servicio
-        </button>
       </header>
 
       {fetchError && (
@@ -677,748 +521,161 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
         </div>
       )}
 
-      <section className="rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 tablet:p-8">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:gap-4">
-          <div ref={filterDropdownRef} className="relative z-10 xl:w-40">
-            <button
-              type="button"
-              onClick={() => setFilterDropdownOpen(!filterDropdownOpen)}
-              className="flex w-full items-center justify-between rounded-xl border border-zinc-300 bg-white px-4 py-3 text-left text-sm font-medium text-zinc-900 transition-all hover:border-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50 dark:hover:border-zinc-500"
-              aria-expanded={filterDropdownOpen}
-              aria-haspopup="listbox"
+      <section
+        className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+        aria-label="Lista de pagos"
+      >
+        <div className="border-b-2 border-emerald-500 bg-emerald-50/40 px-4 py-3.5 dark:bg-emerald-950/20 tablet:px-6">
+          <h2 className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+            Lista de pagos
+          </h2>
+        </div>
+
+        {payments.length === 0 ? (
+          <div
+            className="flex flex-col items-center justify-center gap-4 px-4 py-16 text-center"
+            role="status"
+          >
+            <div
+              className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+              aria-hidden
             >
-              <span>{getFilterLabel()}</span>
               <svg
-                className={`h-5 w-5 transition-transform duration-200 ${filterDropdownOpen ? "rotate-180" : ""}`}
+                className="h-7 w-7"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
-                aria-hidden
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.75}
+                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
-            </button>
-            {filterDropdownOpen && (
-              <ul
-                role="listbox"
-                className="absolute left-0 right-0 top-full z-50 mt-2 max-h-64 overflow-auto rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
-              >
-                <li role="option" aria-selected={dateFilter === "daily"}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDateFilter("daily");
-                      setFilterDropdownOpen(false);
-                    }}
-                    className={`w-full px-4 py-3 text-left text-sm transition-colors ${
-                      dateFilter === "daily"
-                        ? "bg-zinc-100 font-medium text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50"
-                        : "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/50"
-                    }`}
-                  >
-                    Diario
-                  </button>
-                </li>
-                <li role="option" aria-selected={dateFilter === "weekly"}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDateFilter("weekly");
-                      setFilterDropdownOpen(false);
-                    }}
-                    className={`w-full px-4 py-3 text-left text-sm transition-colors ${
-                      dateFilter === "weekly"
-                        ? "bg-zinc-100 font-medium text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50"
-                        : "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/50"
-                    }`}
-                  >
-                    Semanal
-                  </button>
-                </li>
-                <li role="option" aria-selected={dateFilter === "monthly"}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDateFilter("monthly");
-                      setFilterDropdownOpen(false);
-                    }}
-                    className={`w-full px-4 py-3 text-left text-sm transition-colors ${
-                      dateFilter === "monthly"
-                        ? "bg-zinc-100 font-medium text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50"
-                        : "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/50"
-                    }`}
-                  >
-                    Mensual
-                  </button>
-                </li>
-                <li role="option" aria-selected={dateFilter === "yearly"}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDateFilter("yearly");
-                      setFilterDropdownOpen(false);
-                    }}
-                    className={`w-full px-4 py-3 text-left text-sm transition-colors ${
-                      dateFilter === "yearly"
-                        ? "bg-zinc-100 font-medium text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50"
-                        : "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/50"
-                    }`}
-                  >
-                    Anual
-                  </button>
-                </li>
-              </ul>
-            )}
-          </div>
-
-          <div className="xl:w-48">
-            <input
-              id="payments-filter-date"
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-base text-zinc-900 transition-all hover:border-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50 dark:hover:border-zinc-500 dark:focus:border-emerald-400 dark:focus:ring-emerald-500/30"
-              aria-label="Seleccionar fecha"
-            />
-          </div>
-        </div>
-
-        <div className="mt-6 grid grid-cols-1 gap-4 tablet:grid-cols-2">
-          <div className="rounded-xl border border-zinc-200/80 bg-zinc-50/50 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-800/50">
-            <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                Total de pagos mostrados
-              </span>
-              <span className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-                {formatAmount(getTotalAmount())}
-              </span>
-              <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                {filteredPayments.length}{" "}
-                {filteredPayments.length === 1 ? "pago" : "pagos"}
-              </span>
             </div>
-          </div>
-          <div className="rounded-xl border border-zinc-200/80 bg-zinc-50/50 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-800/50">
-            <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                Ganancia estimada
-              </span>
-              <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-500">
-                {formatAmount(getTotalCommission())}
-              </span>
-              <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                {formatAmount(getTotalCommission())} en comisiones
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {(canCreatePayment || (editingPayment && canEditPaymentPerm)) && (
-      <section className="rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 tablet:p-8">
-        <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-            {editingPayment ? "Editar pago" : "Registrar pago"}
-          </h2>
-          {editingPayment && (
-            <button
-              type="button"
-              onClick={handleCancelEdit}
-              disabled={isSubmitting}
-              className="text-sm font-medium text-zinc-600 hover:text-zinc-900 disabled:opacity-50 dark:text-zinc-400 dark:hover:text-zinc-50"
-              aria-label="Cancelar edición"
-            >
-              Cancelar
-            </button>
-          )}
-        </div>
-        <form
-          onSubmit={handleSubmit}
-          className="flex flex-col gap-4"
-        >
-          {/* Fila 1: admin → 3 cols (Recibo · Método · Fecha) | no-admin → 2 cols (Recibo · Método) */}
-          <div className={`grid grid-cols-1 gap-4 ${canSeeEstado ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
-          <div ref={comboboxRef} className="relative min-w-0">
-            <label
-              htmlFor="payment-receipt-search"
-              className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-            >
-              Recibo (cliente · servicio · cuenta) <span className="text-red-500">*</span>
-            </label>
-            {selectedReceipt ? (
-              <div className="flex items-center gap-2 rounded-xl border border-zinc-300 bg-zinc-50 px-4 py-3 dark:border-zinc-600 dark:bg-zinc-800/50">
-                <span className="min-w-0 flex-1 truncate text-sm text-zinc-900 dark:text-zinc-50">
-                  {selectedReceipt.label}
-                </span>
-                <button
-                  type="button"
-                  onClick={handleClearReceipt}
-                  disabled={isSubmitting}
-                  className="shrink-0 rounded p-1 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-700 disabled:opacity-50 dark:hover:bg-zinc-700 dark:hover:text-zinc-200"
-                  aria-label="Limpiar selección"
-                >
-                  <span aria-hidden>×</span>
-                </button>
-              </div>
-            ) : (
-              <>
-                <input
-                  id="payment-receipt-search"
-                  type="search"
-                  autoComplete="off"
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setDropdownOpen(true);
-                  }}
-                  onFocus={() => setDropdownOpen(true)}
-                  disabled={isSubmitting}
-                  placeholder="Buscar por nombre de cliente, servicio o número de cuenta…"
-                  className={inputClass}
-                  aria-invalid={!!formError}
-                  aria-expanded={dropdownOpen}
-                  aria-controls="receipt-search-results"
-                  aria-autocomplete="list"
-                  role="combobox"
-                />
-                {dropdownOpen && (
-                  <ul
-                    id="receipt-search-results"
-                    role="listbox"
-                    className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
-                  >
-                    {searchLoading ? (
-                      <li className="px-3 py-2 text-sm text-zinc-500 dark:text-zinc-400">
-                        Buscando…
-                      </li>
-                    ) : searchQuery.trim().length < MIN_SEARCH_LENGTH ? (
-                      <li className="px-3 py-2 text-sm text-zinc-500 dark:text-zinc-400">
-                        Escribe al menos {MIN_SEARCH_LENGTH} caracteres para buscar
-                      </li>
-                    ) : searchResults.length === 0 ? (
-                      <li className="px-3 py-2 text-sm text-zinc-500 dark:text-zinc-400">
-                        No se encontraron recibos
-                      </li>
-                    ) : (
-                      searchResults.map((receipt) => (
-                        <li key={receipt.id} role="option">
-                          <button
-                            type="button"
-                            onClick={() => handleSelectReceipt(receipt)}
-                            className="w-full px-3 py-2 text-left text-sm text-zinc-900 hover:bg-zinc-100 focus:bg-zinc-100 focus:outline-none dark:text-zinc-50 dark:hover:bg-zinc-800 dark:focus:bg-zinc-800"
-                          >
-                            {getReceiptLabel(receipt)}
-                          </button>
-                        </li>
-                      ))
-                    )}
-                  </ul>
-                )}
-              </>
-            )}
-          </div>
-          <div className="w-full">
-            <label
-              htmlFor="payment-method"
-              className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-            >
-              Método de pago <span className="text-red-500">*</span>
-            </label>
-            <select
-              id="payment-method"
-              required
-              value={selectedPaymentMethod}
-              onChange={(e) => setSelectedPaymentMethod(e.target.value)}
-              disabled={isSubmitting}
-              className={inputClass}
-              aria-invalid={!!formError}
-            >
-              <option value="">Seleccionar método</option>
-              {paymentMethods.map((method) => (
-                <option key={method.id} value={method.id}>
-                  {method.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          {canSeeEstado && (
-            <div className="w-full">
-              <label
-                htmlFor="payment-created-at"
-                className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-              >
-                Fecha
-              </label>
-              <input
-                id="payment-created-at"
-                type="date"
-                value={createdAt}
-                onChange={(e) => setCreatedAt(e.target.value)}
-                disabled={isSubmitting}
-                className={inputClass}
-                aria-label="Fecha del pago"
-              />
-            </div>
-          )}
-          </div>
-          {/* Fila 2: admin → Estado · Añadir comisión · Monto | no-admin → Fecha · Añadir comisión · Monto */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          {canSeeEstado && (
-            <div className="w-full">
-              <label
-                htmlFor="payment-status"
-                className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-              >
-                Estado
-              </label>
-              <select
-                id="payment-status"
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(Number(e.target.value))}
-                disabled={isSubmitting}
-                className={inputClass}
-                aria-label="Estado del pago"
-              >
-                <option value={PAYMENT_STATUS_PENDING}>{STATUS_LABELS[PAYMENT_STATUS_PENDING]}</option>
-                <option value={PAYMENT_STATUS_PAID}>{STATUS_LABELS[PAYMENT_STATUS_PAID]}</option>
-              </select>
-            </div>
-          )}
-          {!canSeeEstado && (
-            <div className="w-full">
-              <label
-                htmlFor="payment-created-at-row2"
-                className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-              >
-                Fecha
-              </label>
-              <input
-                id="payment-created-at-row2"
-                type="date"
-                value={createdAt}
-                onChange={(e) => setCreatedAt(e.target.value)}
-                disabled={isSubmitting}
-                className={inputClass}
-                aria-label="Fecha del pago"
-              />
-            </div>
-          )}
-          <div className="w-full">
-            <div className="mb-1 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5">
-                <label
-                  htmlFor="payment-custom-commission"
-                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-                >
-                  Comisión personalizada
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setCommissionInfoOpen(true)}
-                  className="inline-flex items-center justify-center rounded-full text-zinc-400 transition-colors hover:text-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 dark:hover:text-emerald-400 dark:focus:ring-emerald-400 dark:focus:ring-offset-zinc-900"
-                  aria-label="Ver tabla de comisiones"
-                >
-                  <Info className="h-4 w-4" aria-hidden />
-                </button>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span
-                  id="add-commission-label"
-                  className="text-xs font-medium text-zinc-600 dark:text-zinc-400"
-                >
-                  Añadir comisión
-                </span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={includeCommission}
-                  aria-labelledby="add-commission-label"
-                  disabled={isSubmitting}
-                  onClick={handleToggleIncludeCommission}
-                  className={`relative inline-flex h-6 w-10 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 dark:focus:ring-emerald-400 dark:focus:ring-offset-zinc-900 ${
-                    includeCommission ? "bg-emerald-600 dark:bg-emerald-500" : "bg-zinc-300 dark:bg-zinc-600"
-                  }`}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition-transform ${
-                      includeCommission ? "translate-x-5" : "translate-x-0.5"
-                    }`}
-                    aria-hidden
-                  />
-                </button>
-              </div>
-            </div>
-            <input
-              id="payment-custom-commission"
-              type="number"
-              min="0"
-              step="0.01"
-              value={customCommission}
-              onChange={(e) => setCustomCommission(e.target.value)}
-              disabled={isSubmitting || !includeCommission}
-              placeholder={includeCommission ? "Opcional (auto si vacío)" : "Activa 'Añadir comisión'"}
-              className={inputClass}
-              aria-invalid={!!formError}
-              aria-label="Comisión personalizada"
-            />
-          </div>
-          <div className="w-full">
-            <label
-              htmlFor="payment-amount"
-              className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-            >
-              Monto <span className="text-red-500">*</span>
-            </label>
-            <input
-              id="payment-amount"
-              type="number"
-              min="0"
-              step="0.01"
-              required
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              disabled={isSubmitting}
-              placeholder="0.00"
-              className={inputClass}
-              aria-invalid={!!formError}
-            />
-          </div>
-          </div>
-          <button
-            type="submit"
-            disabled={isSubmitting || !selectedReceipt}
-            className="h-12 w-full rounded-xl bg-emerald-600 px-5 text-sm font-medium text-white transition-all hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 dark:bg-emerald-500 dark:hover:bg-emerald-600 dark:focus:ring-offset-zinc-900"
-            aria-busy={isSubmitting}
-            aria-label={editingPayment ? "Guardar cambios" : "Registrar pago"}
-          >
-            {isSubmitting ? "Guardando…" : editingPayment ? "Guardar" : "Registrar"}
-          </button>
-        </form>
-        {formError && (
-          <div
-            role="alert"
-            className="mt-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-300"
-          >
-            {formError}
-          </div>
-        )}
-        <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
-          Busca por nombre de cliente, nombre de servicio o número de cuenta/recibo. Selecciona
-          un resultado para registrar el pago.
-        </p>
-      </section>
-      )}
-
-      <section className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="border-b border-zinc-200/80 bg-zinc-50/50 px-4 pb-3.5 pt-4 dark:border-zinc-800 dark:bg-zinc-800/30 tablet:px-6 tablet:pt-4">
-          <div className="flex flex-col gap-3 tablet:flex-row tablet:items-center tablet:justify-between">
-            <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-              Historial de pagos
-            </h2>
-            <div className="w-full">
-              <label
-                htmlFor="payments-history-search"
-                className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400"
-              >
-                Buscar en historial (cliente, servicio, monto, fecha)
-              </label>
-              <div className="relative">
-                <svg
-                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 dark:text-zinc-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  aria-hidden
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
-                <input
-                  id="payments-history-search"
-                  type="search"
-                  value={historySearch}
-                  onChange={(event) => setHistorySearch(event.target.value)}
-                  placeholder="Ej. Juan, Roblox, 25.00, 26 feb 2026…"
-                  className="w-full rounded-full border border-zinc-300 bg-white py-2.5 pr-4 pl-10 text-sm text-zinc-900 placeholder-zinc-400 outline-none transition-all duration-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-500/50 dark:bg-zinc-700 dark:text-zinc-100 dark:placeholder-zinc-400 dark:focus:border-emerald-400 dark:focus:ring-emerald-500/30"
-                  aria-label="Buscar pagos por cliente, servicio, monto o fecha"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-        {filteredPayments.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-4 px-4 py-20 text-center">
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              No hay pagos para mostrar con los filtros actuales.
+              No hay pagos para mostrar.
             </p>
           </div>
         ) : isMobile ? (
-          <ul className="divide-y divide-zinc-200/80 px-4 py-2 dark:divide-zinc-800 tablet:px-6" role="list">
-            {filteredPayments.map((payment, index) => (
-                <li
-                  key={payment.id}
-                  className="flex flex-col gap-2 py-4 first:pt-4 last:pb-4 tablet:py-5"
-                >
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400" aria-hidden>
-                      {index + 1}.
-                    </span>
-                    <span className="flex items-center gap-2 text-zinc-900 dark:text-zinc-50">
-                      <ServiceImageThumb url={getPaymentServiceImageUrl(payment)} size="h-8 w-8" />
-                      <span className="min-w-0">{getPaymentReceiptDisplay(payment)}</span>
-                    </span>
-                    <span className="font-medium text-zinc-900 dark:text-zinc-50">
-                      {formatAmount(payment.total_amount)}
-                    </span>
-                    <span className="text-xs text-zinc-600 dark:text-zinc-400">
-                      Comisión: {formatAmount(payment.commission)}
-                    </span>
-                    <span className="text-xs text-zinc-600 dark:text-zinc-400">
-                      {getPaymentMethodName(payment)}
-                    </span>
-                    <span className="text-xs">
-                      <span
-                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                          payment.status === PAYMENT_STATUS_PAID
-                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
-                            : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-                        }`}
-                      >
-                        {getStatusLabel(payment.status)}
-                      </span>
-                    </span>
-                    <span className="text-xs text-zinc-500 dark:text-zinc-500">
-                      {formatDate(payment.created_at)}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3 pt-1">
-                    {canEditPaymentPerm && (
-                      <button
-                        type="button"
-                        onClick={() => handleEditPayment(payment)}
-                        className="rounded p-1.5 text-emerald-600 hover:bg-emerald-100 dark:text-emerald-400 dark:hover:bg-emerald-900/40"
-                        aria-label={`Editar pago de ${getPaymentReceiptDisplay(payment)}`}
-                        title={`Editar pago de ${getPaymentReceiptDisplay(payment)}`}
-                      >
-                        <Pencil className="h-4 w-4" aria-hidden />
-                      </button>
-                    )}
-                    {canDeletePayment && (
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteClick(payment)}
-                        className="rounded p-1.5 text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/40"
-                        aria-label={`Eliminar pago de ${getPaymentReceiptDisplay(payment)}`}
-                        title={`Eliminar pago de ${getPaymentReceiptDisplay(payment)}`}
-                      >
-                        <Trash2 className="h-4 w-4" aria-hidden />
-                      </button>
-                    )}
-                    {getProofPublicUrl(payment) ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => handleProofPreview(payment)}
-                          className="rounded p-1.5 text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                          aria-label="Ver comprobante de pago"
-                          title="Ver comprobante de pago"
-                        >
-                          <span className="inline-flex items-center gap-1">
-                            <Eye className="h-4 w-4" aria-hidden />
-                            <FileText className="h-4 w-4" aria-hidden />
-                          </span>
-                        </button>
-                        {canSeeProofActions && (
-                          <button
-                            type="button"
-                            onClick={() => handleProofRemove(payment)}
-                            disabled={proofRemovingId === payment.id}
-                            className="rounded p-1.5 text-red-600 hover:bg-red-100 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/40"
-                            aria-label="Quitar comprobante de pago"
-                            title="Quitar comprobante de pago"
-                          >
-                            <span className="inline-flex items-center gap-1">
-                              <FileText className="h-4 w-4" aria-hidden />
-                              <Trash2 className="h-4 w-4" aria-hidden />
-                            </span>
-                          </button>
-                        )}
-                      </>
-                    ) : (
-                      canSeeProofActions && (
-                        <button
-                          type="button"
-                          onClick={() => handleProofUploadOpen(payment)}
-                          className="rounded p-1.5 text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                          aria-label="Subir comprobante de pago"
-                          title="Subir comprobante de pago"
-                        >
-                          <span className="inline-flex items-center gap-1">
-                            <Upload className="h-4 w-4" aria-hidden />
-                            <FileText className="h-4 w-4" aria-hidden />
-                          </span>
-                        </button>
-                      )
-                    )}
-                  </div>
-                </li>
+          <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {payments.map((payment) => (
+              <li
+                key={payment.id}
+                className="space-y-3 px-4 py-4 transition-colors hover:bg-emerald-50/40 dark:hover:bg-emerald-950/10"
+              >
+                <ServicioCell
+                  payment={payment}
+                  onCopied={handleCopied}
+                  onCopyError={handleCopyError}
+                />
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+                  <span
+                    className={`font-medium ${
+                      isPaidStatus(payment.status)
+                        ? "text-emerald-700 dark:text-emerald-400"
+                        : "text-zinc-900 dark:text-zinc-50"
+                    }`}
+                  >
+                    Monto: {formatAmount(payment.total_amount)}
+                  </span>
+                  <span className="text-zinc-600 dark:text-zinc-400">
+                    Comisión: {formatAmount(payment.commission)}
+                  </span>
+                  <StatusBadge status={payment.status} />
+                  <span className="text-zinc-500 dark:text-zinc-400">
+                    {formatPaymentDateHour(payment.created_at)}
+                  </span>
+                </div>
+                <PaymentActions
+                  payment={payment}
+                  {...actionHandlers}
+                />
+              </li>
             ))}
           </ul>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-center text-sm" role="grid">
+            <table className="w-full text-sm" role="grid">
               <thead>
                 <tr className="border-b border-zinc-200/80 dark:border-zinc-800">
-                  <th className="w-12 px-2 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-4" scope="col">
-                    #
+                  <th
+                    className="px-4 py-3.5 text-left font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6"
+                    scope="col"
+                  >
+                    Servicio
                   </th>
-                  <th className="max-w-[300px] px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
-                    Recibo (cliente · servicio · cuenta)
-                  </th>
-                  <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
+                  <th
+                    className="px-4 py-3.5 text-left font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6"
+                    scope="col"
+                  >
                     Monto
                   </th>
-                  <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
+                  <th
+                    className="px-4 py-3.5 text-left font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6"
+                    scope="col"
+                  >
                     Comisión
                   </th>
-                  <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
-                    Método de pago
-                  </th>
-                  <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
+                  <th
+                    className="px-4 py-3.5 text-left font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6"
+                    scope="col"
+                  >
                     Estado
                   </th>
-                  <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
-                    Fecha
+                  <th
+                    className="px-4 py-3.5 text-left font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6"
+                    scope="col"
+                  >
+                    Fecha / Hora
                   </th>
-                  <th className="px-4 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6">
+                  <th
+                    className="px-4 py-3.5 text-left font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6"
+                    scope="col"
+                  >
                     Acciones
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {filteredPayments.map((payment, index) => (
-                    <tr
-                      key={payment.id}
-                      className="border-b border-zinc-100 last:border-0 transition-colors hover:bg-zinc-50/50 dark:border-zinc-800 dark:hover:bg-zinc-800/30"
+                {payments.map((payment) => (
+                  <tr
+                    key={payment.id}
+                    className="border-b border-zinc-100 last:border-0 transition-colors hover:bg-emerald-50/40 dark:border-zinc-800 dark:hover:bg-emerald-950/10"
+                  >
+                    <td className="max-w-md px-4 py-3.5 tablet:px-6">
+                      <ServicioCell
+                        payment={payment}
+                        onCopied={handleCopied}
+                        onCopyError={handleCopyError}
+                      />
+                    </td>
+                    <td
+                      className={`whitespace-nowrap px-4 py-3.5 font-medium tablet:px-6 ${
+                        isPaidStatus(payment.status)
+                          ? "text-emerald-700 dark:text-emerald-400"
+                          : "text-zinc-900 dark:text-zinc-50"
+                      }`}
                     >
-                      <td className="w-12 px-2 py-3.5 text-center text-zinc-500 dark:text-zinc-400 tablet:px-4" aria-label={`Fila ${index + 1}`}>
-                        {index + 1}
-                      </td>
-                      <td className="max-w-[320px] min-w-0 px-4 py-3.5 text-center text-zinc-900 dark:text-zinc-50 tablet:px-6">
-                        <div className="flex items-center gap-2.5">
-                          <ServiceImageThumb url={getPaymentServiceImageUrl(payment)} />
-                          <div
-                            className="min-w-0 max-w-full flex-1 overflow-x-auto overflow-y-hidden text-left"
-                            style={{ scrollbarGutter: "stable" }}
-                            title={getPaymentReceiptDisplay(payment)}
-                          >
-                            <span className="inline-block whitespace-nowrap">
-                              {getPaymentReceiptDisplay(payment)}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3.5 text-center font-medium text-zinc-900 dark:text-zinc-50 tablet:px-6">
-                        {formatAmount(payment.total_amount)}
-                      </td>
-                      <td className="px-4 py-3.5 text-center text-zinc-600 dark:text-zinc-400 tablet:px-6">
-                        {formatAmount(payment.commission)}
-                      </td>
-                      <td className="px-4 py-3.5 text-center text-zinc-600 dark:text-zinc-400 tablet:px-6">
-                        {getPaymentMethodName(payment)}
-                      </td>
-                      <td className="px-4 py-3.5 text-center tablet:px-6">
-                        <span
-                          className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                            payment.status === PAYMENT_STATUS_PAID
-                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
-                              : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
-                          }`}
-                          aria-label={`Estado: ${getStatusLabel(payment.status)}`}
-                        >
-                          {getStatusLabel(payment.status)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5 text-center text-zinc-500 dark:text-zinc-500 tablet:px-6">
-                        {formatDate(payment.created_at)}
-                      </td>
-                      <td className="px-4 py-3.5 text-center tablet:px-6">
-                        <div className="flex flex-wrap items-center justify-center gap-3">
-                          {canEditPaymentPerm && (
-                            <button
-                              type="button"
-                              onClick={() => handleEditPayment(payment)}
-                              className="rounded p-1.5 text-emerald-600 hover:bg-emerald-100 dark:text-emerald-400 dark:hover:bg-emerald-900/40"
-                              aria-label={`Editar pago de ${getPaymentReceiptDisplay(payment)}`}
-                              title={`Editar pago de ${getPaymentReceiptDisplay(payment)}`}
-                            >
-                              <Pencil className="h-4 w-4" aria-hidden />
-                            </button>
-                          )}
-                          {canDeletePayment && (
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteClick(payment)}
-                              className="rounded p-1.5 text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/40"
-                              aria-label={`Eliminar pago de ${getPaymentReceiptDisplay(payment)}`}
-                              title={`Eliminar pago de ${getPaymentReceiptDisplay(payment)}`}
-                            >
-                              <Trash2 className="h-4 w-4" aria-hidden />
-                            </button>
-                          )}
-                          {getProofPublicUrl(payment) ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => handleProofPreview(payment)}
-                                className="rounded p-1.5 text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                                aria-label="Ver comprobante de pago"
-                                title="Ver comprobante de pago"
-                              >
-                                <span className="inline-flex items-center gap-1">
-                                  <Eye className="h-4 w-4" aria-hidden />
-                                  <FileText className="h-4 w-4" aria-hidden />
-                                </span>
-                              </button>
-                              {canSeeProofActions && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleProofRemove(payment)}
-                                  disabled={proofRemovingId === payment.id}
-                                  className="rounded p-1.5 text-red-600 hover:bg-red-100 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-900/40"
-                                  aria-label="Quitar comprobante de pago"
-                                  title="Quitar comprobante de pago"
-                                >
-                                  <span className="inline-flex items-center gap-1">
-                                    <FileText className="h-4 w-4" aria-hidden />
-                                    <Trash2 className="h-4 w-4" aria-hidden />
-                                  </span>
-                                </button>
-                              )}
-                            </>
-                          ) : (
-                            canSeeProofActions && (
-                              <button
-                                type="button"
-                                onClick={() => handleProofUploadOpen(payment)}
-                                className="rounded p-1.5 text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                                aria-label="Subir comprobante de pago"
-                                title="Subir comprobante de pago"
-                              >
-                                <span className="inline-flex items-center gap-1">
-                                  <Upload className="h-4 w-4" aria-hidden />
-                                  <FileText className="h-4 w-4" aria-hidden />
-                                </span>
-                              </button>
-                            )
-                          )}
-                        </div>
-                      </td>
-                    </tr>
+                      {formatAmount(payment.total_amount)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-zinc-600 dark:text-zinc-400 tablet:px-6">
+                      {formatAmount(payment.commission)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3.5 tablet:px-6">
+                      <StatusBadge status={payment.status} />
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-zinc-600 dark:text-zinc-400 tablet:px-6">
+                      {formatPaymentDateHour(payment.created_at)}
+                    </td>
+                    <td className="px-4 py-3.5 tablet:px-6">
+                      <PaymentActions
+                        payment={payment}
+                        {...actionHandlers}
+                      />
+                    </td>
+                  </tr>
                 ))}
               </tbody>
             </table>
@@ -1426,134 +683,32 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
         )}
       </section>
 
-      {/* Proof preview modal */}
-      {proofPreviewPayment && (
+      {copyFeedback && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Vista previa del comprobante de pago"
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-4 left-4 right-4 z-40 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 shadow-lg dark:border-emerald-900/50 dark:bg-emerald-950/50 dark:text-emerald-200 tablet:left-auto tablet:right-4 tablet:max-w-sm"
         >
-          <div className="relative flex max-h-[90vh] max-w-[90vw] flex-col items-center justify-center rounded-xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
-            <button
-              type="button"
-              onClick={handleProofPreviewClose}
-              className="absolute -right-2 -top-2 z-10 rounded-full bg-zinc-800 p-2 text-white shadow-lg hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:bg-zinc-700 dark:hover:bg-zinc-600"
-              aria-label="Cerrar"
-            >
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-            {proofPreviewLoading && (
-              <p className="py-8 text-sm text-zinc-500 dark:text-zinc-400" aria-live="polite">
-                Cargando imagen…
-              </p>
-            )}
-            {proofPreviewError && !proofPreviewLoading && (
-              <p
-                className="max-w-sm py-8 text-center text-sm text-red-600 dark:text-red-400"
-                role="alert"
-              >
-                {proofPreviewError}
-              </p>
-            )}
-            {proofPreviewImageUrl && !proofPreviewLoading && (
-              <img
-                src={proofPreviewImageUrl}
-                alt="Comprobante de pago"
-                className="max-h-[85vh] max-w-full rounded-lg border border-zinc-200 object-contain shadow-inner dark:border-zinc-600"
-              />
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={handleProofPreviewClose}
-            className="absolute inset-0 -z-10"
-            aria-label="Cerrar overlay"
-          />
+          {copyFeedback}
         </div>
       )}
 
-      {/* Proof upload modal */}
-      {proofUploadModalPayment && (
+      {whatsAppFeedback && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="proof-upload-title"
-        >
-          <div className="w-full max-w-md rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
-            <h2 id="proof-upload-title" className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
-              Subir comprobante de pago
-            </h2>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-              Recibo: {getPaymentReceiptDisplay(proofUploadModalPayment)}. Selecciona una imagen (JPG, PNG, GIF o WebP, máx. 5 MB).
-            </p>
-            <form onSubmit={handleProofUploadSubmit} className="mt-4 space-y-4">
-              <div>
-                <label
-                  htmlFor="proof-file"
-                  className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-                >
-                  Imagen del comprobante
-                </label>
-                <input
-                  ref={proofFileInputRef}
-                  id="proof-file"
-                  type="file"
-                  accept="image/jpeg,image/png,image/gif,image/webp"
-                  className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-emerald-700 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50 dark:file:bg-emerald-900/30 dark:file:text-emerald-300"
-                  aria-describedby="proof-file-hint"
-                />
-                <p id="proof-file-hint" className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                  JPG, PNG, GIF o WebP. Máximo 5 MB.
-                </p>
-              </div>
-              {proofError && (
-                <div
-                  role="alert"
-                  className="rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-300"
-                >
-                  {proofError}
-                </div>
-              )}
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={handleProofUploadClose}
-                  className="flex-1 rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm font-medium text-zinc-700 transition-all hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-                  aria-label="Cancelar"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={proofUploadingId === proofUploadModalPayment.id}
-                  className="flex-1 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-medium text-white transition-all hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 dark:focus:ring-offset-zinc-900"
-                  aria-busy={proofUploadingId === proofUploadModalPayment.id}
-                  aria-label="Subir imagen"
-                >
-                  {proofUploadingId === proofUploadModalPayment.id ? "Subiendo…" : "Subir"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Global proof error (e.g. from remove) */}
-      {proofError && !proofUploadModalPayment && (
-        <div
-          role="alert"
-          className="fixed bottom-4 left-4 right-4 z-40 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 shadow-lg dark:bg-red-950/50 dark:text-red-300 tablet:left-auto tablet:right-4 tablet:max-w-sm"
+          role={whatsAppFeedback.type === "error" ? "alert" : "status"}
+          aria-live="polite"
+          className={`fixed bottom-4 left-4 right-4 z-40 rounded-xl px-4 py-3 text-sm shadow-lg tablet:left-auto tablet:right-4 tablet:max-w-sm ${
+            whatsAppFeedback.type === "error"
+              ? "bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-300"
+              : "border border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/50 dark:text-emerald-200"
+          }`}
         >
           <div className="flex items-center justify-between gap-2">
-            <span>{proofError}</span>
+            <span>{whatsAppFeedback.message}</span>
             <button
               type="button"
-              onClick={() => setProofError(null)}
-              className="shrink-0 rounded p-1 hover:bg-red-100 dark:hover:bg-red-900/30"
+              onClick={() => setWhatsAppFeedback(null)}
+              className="shrink-0 rounded p-1 hover:bg-black/5 dark:hover:bg-white/10"
               aria-label="Cerrar"
             >
               <span aria-hidden>×</span>
@@ -1562,7 +717,6 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
         </div>
       )}
 
-      {/* Delete confirmation modal */}
       {deleteTarget && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
@@ -1576,9 +730,9 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
               Eliminar pago
             </h2>
             <p id="delete-dialog-desc" className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-              ¿Estás seguro de que deseas eliminar este pago de{" "}
-              <strong>{formatAmount(deleteTarget.total_amount)}</strong>
-              ? Esta acción no se puede deshacer.
+              ¿Eliminar el pago de{" "}
+              <strong>{formatAmount(deleteTarget.total_amount)}</strong>? Esta acción no se
+              puede deshacer.
             </p>
             {deleteError && (
               <div
@@ -1593,8 +747,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                 type="button"
                 onClick={handleDeleteCancel}
                 disabled={isDeleting}
-                className="flex-1 rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm font-medium text-zinc-700 transition-all hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-                aria-label="Cancelar"
+                className="flex-1 rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
               >
                 Cancelar
               </button>
@@ -1602,9 +755,8 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                 type="button"
                 onClick={handleDeleteConfirm}
                 disabled={isDeleting}
-                className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-medium text-white transition-all hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 dark:focus:ring-offset-zinc-900"
+                className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
                 aria-busy={isDeleting}
-                aria-label="Eliminar pago"
               >
                 {isDeleting ? "Eliminando…" : "Eliminar"}
               </button>
@@ -1613,177 +765,6 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
         </div>
       )}
 
-      {/* Commission table info modal */}
-      {commissionInfoOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="commission-info-title"
-        >
-          <button
-            type="button"
-            onClick={() => setCommissionInfoOpen(false)}
-            className="absolute inset-0 -z-10"
-            aria-label="Cerrar overlay"
-          />
-          <div className="w-full max-w-md rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="flex items-start justify-between gap-3">
-              <h2
-                id="commission-info-title"
-                className="text-xl font-bold text-zinc-900 dark:text-zinc-50"
-              >
-                Tabla de comisiones
-              </h2>
-              <button
-                type="button"
-                onClick={() => setCommissionInfoOpen(false)}
-                className="rounded-full p-1 text-zinc-400 transition-colors hover:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:hover:text-zinc-200"
-                aria-label="Cerrar"
-              >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-              La comisión se calcula automáticamente según el monto del servicio.
-            </p>
-            <div className="mt-4 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-700">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-zinc-50 text-left text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-                    <th className="px-4 py-2.5 font-medium">Monto del servicio</th>
-                    <th className="px-4 py-2.5 text-right font-medium">Comisión</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
-                  <tr className="text-zinc-800 dark:text-zinc-200">
-                    <td className="px-4 py-2.5">Menos de $0.50</td>
-                    <td className="px-4 py-2.5 text-right font-medium">$0.25</td>
-                  </tr>
-                  <tr className="text-zinc-800 dark:text-zinc-200">
-                    <td className="px-4 py-2.5">Menos de $1</td>
-                    <td className="px-4 py-2.5 text-right font-medium">$0.50</td>
-                  </tr>
-                  <tr className="text-zinc-800 dark:text-zinc-200">
-                    <td className="px-4 py-2.5">Entre $1 y $50</td>
-                    <td className="px-4 py-2.5 text-right font-medium">$1</td>
-                  </tr>
-                  <tr className="text-zinc-800 dark:text-zinc-200">
-                    <td className="px-4 py-2.5">$50</td>
-                    <td className="px-4 py-2.5 text-right font-medium">$2</td>
-                  </tr>
-                  <tr className="text-zinc-800 dark:text-zinc-200">
-                    <td className="px-4 py-2.5">$100</td>
-                    <td className="px-4 py-2.5 text-right font-medium">$3</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
-              A partir de $1, la comisión aumenta $1 por cada $50 adicionales del monto.
-            </p>
-            <div className="mt-6">
-              <button
-                type="button"
-                onClick={() => setCommissionInfoOpen(false)}
-                className="w-full rounded-xl bg-emerald-600 px-4 py-3 text-sm font-medium text-white transition-all hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:bg-emerald-500 dark:hover:bg-emerald-600 dark:focus:ring-offset-zinc-900"
-                aria-label="Entendido"
-              >
-                Entendido
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Consultas de Servicio modal */}
-      {consultaOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm tablet:p-6"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="consulta-title"
-        >
-          <div className="flex max-h-[90dvh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200/80 px-5 py-4 dark:border-zinc-800">
-              <h2 id="consulta-title" className="truncate text-lg font-bold text-zinc-900 dark:text-zinc-50">
-                Consultas de Servicio
-              </h2>
-              <button
-                type="button"
-                onClick={handleCloseConsulta}
-                className="rounded-full p-1.5 text-zinc-400 transition-colors hover:text-zinc-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 dark:hover:text-zinc-200"
-                aria-label="Cerrar"
-              >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto p-5">
-              {consultaLoading ? (
-                <p className="py-10 text-center text-sm text-zinc-500 dark:text-zinc-400" aria-live="polite">
-                  Cargando servicios…
-                </p>
-              ) : consultaError ? (
-                <p className="py-10 text-center text-sm text-red-600 dark:text-red-400" role="alert">
-                  {consultaError}
-                </p>
-              ) : consultaServices.length === 0 ? (
-                <p className="py-10 text-center text-sm text-zinc-500 dark:text-zinc-400">
-                  No hay servicios definidos.
-                </p>
-              ) : (
-                <ul className="grid grid-cols-2 gap-3 tablet:grid-cols-3 desktop:grid-cols-4" role="list">
-                  {consultaServices.map((service) => {
-                    const url = getServiceImageUrlDirect(service);
-                    const hasLink = Boolean(service.link && service.link.trim());
-                    const cardContent = (
-                      <>
-                        <ServiceImageThumb url={url} size="h-16 w-16" />
-                        <span className="line-clamp-2 text-center text-sm font-medium">
-                          {service.name}
-                        </span>
-                        {!hasLink && (
-                          <span className="text-[11px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-600">
-                            Consultar a Diego
-                          </span>
-                        )}
-                      </>
-                    );
-                    return (
-                      <li key={service.id}>
-                        {hasLink ? (
-                          <a
-                            href={service.link}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex h-full w-full flex-col items-center gap-2.5 rounded-xl border border-zinc-200 bg-white p-4 text-zinc-900 shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-400 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-50 dark:hover:border-emerald-500 dark:focus:ring-offset-zinc-900"
-                            aria-label={`Abrir consulta de ${service.name} en una nueva pestaña`}
-                          >
-                            {cardContent}
-                          </a>
-                        ) : (
-                          <div
-                            className="flex h-full w-full cursor-not-allowed flex-col items-center gap-2.5 rounded-xl border border-dashed border-zinc-200 bg-zinc-50/60 p-4 text-zinc-400 opacity-70 dark:border-zinc-700 dark:bg-zinc-800/30 dark:text-zinc-500"
-                            aria-disabled="true"
-                            title="Este servicio no tiene enlace de consulta"
-                          >
-                            {cardContent}
-                          </div>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

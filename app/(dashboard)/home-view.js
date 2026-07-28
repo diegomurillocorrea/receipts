@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { DaiegoLogo } from "@/components/daiego-logo";
 import { searchReceiptsForHomeAction } from "./actions";
 
@@ -54,27 +56,14 @@ function ServicePlaceholder({ className = "h-full w-full" }) {
   );
 }
 
-function ServiceTile({ service, onSelect }) {
+function ServiceTile({ service }) {
   const imageUrl = getServiceImageUrl(service);
   const name = service.name?.trim() || "Servicio sin nombre";
 
-  const handleClick = () => {
-    onSelect(service);
-  };
-
-  const handleKeyDown = (event) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      onSelect(service);
-    }
-  };
-
   return (
     <li className="min-w-0">
-      <button
-        type="button"
-        onClick={handleClick}
-        onKeyDown={handleKeyDown}
+      <Link
+        href={`/${service.id}`}
         className="group flex w-full flex-col items-center gap-1.5 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950"
         aria-label={`Buscar cuentas de ${name}`}
       >
@@ -93,10 +82,10 @@ function ServiceTile({ service, onSelect }) {
             <ServicePlaceholder />
           )}
         </div>
-        <span className="line-clamp-2 w-full text-center text-[11px] font-medium leading-snug text-zinc-700 dark:text-zinc-300 tablet:text-xs">
+        <span className="line-clamp-2 w-full text-center text-[11px] font-medium leading-snug text-zinc-700 transition-colors group-hover:text-emerald-700 dark:text-zinc-300 dark:group-hover:text-emerald-400 tablet:text-xs">
           {name}
         </span>
-      </button>
+      </Link>
     </li>
   );
 }
@@ -147,7 +136,8 @@ function SearchResultRow({
   );
 }
 
-function HomeSearchView({ service, onBack }) {
+function HomeSearchView({ service }) {
+  const router = useRouter();
   const searchInputId = useId();
   const searchTimeoutRef = useRef(null);
   const inputRef = useRef(null);
@@ -212,18 +202,17 @@ function HomeSearchView({ service, onBack }) {
     inputRef.current?.focus();
   }, []);
 
-  const handleBack = () => {
-    onBack();
-  };
-
   const handleSearchChange = (event) => {
     setSearchQuery(event.target.value);
     setSelectedReceiptId(null);
   };
 
   const handleSelectReceipt = (receipt) => {
+    const account = (receipt?.account_receipt_number ?? "").trim();
+    if (!account) return;
+
     setSelectedReceiptId(receipt.id);
-    // TODO: enlazar a creación de pago en /payments con receipt preseleccionado
+    router.push(`/${service.id}/${encodeURIComponent(account)}`);
   };
 
   let resultsStatus = null;
@@ -268,10 +257,9 @@ function HomeSearchView({ service, onBack }) {
 
   return (
     <div className="relative mx-auto flex w-full max-w-lg flex-1 flex-col px-1">
-      <button
-        type="button"
-        onClick={handleBack}
-        className="absolute left-0 top-0 z-10 inline-flex min-h-11 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50 dark:focus:ring-offset-zinc-950"
+      <Link
+        href="/"
+        className="fixed left-4 top-4 z-20 inline-flex min-h-11 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50 dark:focus:ring-offset-zinc-950"
         aria-label="Volver a servicios"
       >
         <svg
@@ -289,7 +277,7 @@ function HomeSearchView({ service, onBack }) {
           />
         </svg>
         Servicios
-      </button>
+      </Link>
 
       <div className="flex flex-1 flex-col items-center justify-center py-16">
         <div
@@ -378,6 +366,28 @@ function HomeSearchView({ service, onBack }) {
   );
 }
 
+function HomeSearchViewSkeleton() {
+  return (
+    <div
+      className="relative mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center px-1 py-16"
+      aria-busy="true"
+      aria-live="polite"
+    >
+      <p className="sr-only">Cargando búsqueda…</p>
+      <div className="mb-6 flex items-center justify-center gap-3 tablet:mb-8 tablet:gap-4">
+        <div className="h-[7.5rem] w-[7.5rem] animate-pulse rounded-2xl bg-zinc-200 dark:bg-zinc-800 tablet:h-36 tablet:w-36" />
+        <div className="h-[7.5rem] w-[7.5rem] animate-pulse rounded-2xl bg-zinc-200 dark:bg-zinc-800 tablet:h-36 tablet:w-36" />
+      </div>
+      <div className="mb-4 h-5 w-72 max-w-full animate-pulse rounded-lg bg-zinc-200 dark:bg-zinc-800" />
+      <div className="mb-2 h-12 w-full animate-pulse rounded-xl bg-zinc-200 dark:bg-zinc-800" />
+      <div className="mb-4 h-3 w-24 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800" />
+      <div className="h-40 w-full animate-pulse rounded-xl bg-zinc-200 dark:bg-zinc-800" />
+    </div>
+  );
+}
+
+export { HomeSearchView, HomeSearchViewSkeleton };
+
 export function HomeViewSkeleton() {
   return (
     <div
@@ -406,29 +416,10 @@ export function HomeViewSkeleton() {
 }
 
 export function HomeView({ services, fetchError }) {
-  const [selectedService, setSelectedService] = useState(null);
-
-  const handleSelectService = (service) => {
-    setSelectedService(service);
-  };
-
-  const handleBackToServices = () => {
-    setSelectedService(null);
-  };
-
-  if (selectedService) {
-    return (
-      <HomeSearchView
-        service={selectedService}
-        onBack={handleBackToServices}
-      />
-    );
-  }
-
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col items-center px-1 pb-10 pt-8 tablet:pt-12 desktop:pt-14">
       <div
-        className="mb-6 flex w-[min(100%,16vw)] min-w-36 items-center justify-center rounded-2xl border border-zinc-200/80 bg-white px-4 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 tablet:mb-8 tablet:min-w-44 tablet:px-5 tablet:py-4"
+        className="mb-6 flex w-[min(100%,16vw)] min-w-36 items-center justify-center tablet:mb-8 tablet:min-w-44"
         role="group"
         aria-label="DAIEGO"
       >
@@ -452,23 +443,34 @@ export function HomeView({ services, fetchError }) {
           No se pudieron cargar los servicios. Intenta de nuevo más tarde.
         </p>
       ) : services.length === 0 ? (
-        <p
-          className="max-w-md text-center text-sm text-zinc-500 dark:text-zinc-400"
+        <div
+          className="flex max-w-md flex-col items-center gap-4 text-center"
           role="status"
         >
-          Aún no hay servicios disponibles.
-        </p>
+          <div
+            className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+            aria-hidden
+          >
+            <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.75}
+                d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+              />
+            </svg>
+          </div>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            Aún no hay servicios disponibles.
+          </p>
+        </div>
       ) : (
         <ul
           className="grid w-full grid-cols-4 justify-items-stretch gap-3 tablet:grid-cols-6 tablet:gap-4 desktop:grid-cols-8 desktop:gap-4 xl:grid-cols-10"
           aria-label="Servicios disponibles"
         >
           {services.map((service) => (
-            <ServiceTile
-              key={service.id}
-              service={service}
-              onSelect={handleSelectService}
-            />
+            <ServiceTile key={service.id} service={service} />
           ))}
         </ul>
       )}
