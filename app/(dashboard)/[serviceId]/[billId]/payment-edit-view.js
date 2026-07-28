@@ -3,7 +3,7 @@
 import { useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Eye, FileX, Upload } from "lucide-react";
+import { Eye, FileX, Pencil, Upload } from "lucide-react";
 import { DaiegoLogo } from "@/components/daiego-logo";
 import {
   updatePaymentAction,
@@ -127,12 +127,17 @@ export function PaymentEditView({
   const [proofPreviewLoading, setProofPreviewLoading] = useState(false);
 
   const serviceName = service?.name?.trim() || "Servicio";
+  const serviceId = service?.id ?? null;
   const serviceImageUrl = getServiceImageUrl(service);
   const clientLabel = getClientDisplayName(receipt?.clients);
   const accountNumber = (receipt?.account_receipt_number ?? "").trim();
   const contextLabel = accountNumber
     ? `${clientLabel} - ${accountNumber}`
     : clientLabel;
+  const changeClientHref =
+    serviceId && payment?.id
+      ? `/${serviceId}?paymentId=${encodeURIComponent(payment.id)}`
+      : null;
 
   const isBusy = isSubmitting || isSuccess || isProofBusy;
   const canInteract = canEdit && !isBusy;
@@ -325,7 +330,7 @@ export function PaymentEditView({
     <div className="relative mx-auto flex w-full max-w-lg flex-1 flex-col px-1">
       <Link
         href={backHref}
-        className="fixed left-4 top-4 z-20 inline-flex min-h-11 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50 dark:focus:ring-offset-zinc-950"
+        className="fixed left-16 top-4 z-20 inline-flex min-h-11 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50 dark:focus:ring-offset-zinc-950"
         aria-label="Volver a pagos"
       >
         <svg
@@ -375,9 +380,21 @@ export function PaymentEditView({
           </div>
         </div>
 
-        <p className="mb-6 max-w-md text-center text-base font-semibold text-zinc-900 dark:text-zinc-50">
-          {contextLabel}
-        </p>
+        <div className="mb-6 flex max-w-md items-center justify-center gap-2">
+          <p className="text-center text-base font-semibold text-zinc-900 dark:text-zinc-50">
+            {contextLabel}
+          </p>
+          {changeClientHref ? (
+            <Link
+              href={changeClientHref}
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sky-500 transition-colors hover:bg-sky-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50 dark:text-sky-400 dark:hover:bg-sky-900/40"
+              aria-label="Cambiar cliente de este pago"
+              title="Cambiar cliente"
+            >
+              <Pencil className="h-4 w-4" aria-hidden />
+            </Link>
+          ) : null}
+        </div>
 
         <form
           onSubmit={handleSubmit}

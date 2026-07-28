@@ -96,6 +96,33 @@ function getPaymentServiceId(payment) {
   return svc?.id ?? null;
 }
 
+function getPaymentServiceName(payment) {
+  const receipt = normalizeReceiptRef(payment.receipt ?? payment.receipts);
+  if (!receipt) return "";
+  const service = receipt.services ?? receipt.service;
+  const svc = Array.isArray(service) ? service[0] : service;
+  return (svc?.name ?? "").trim();
+}
+
+function paymentMatchesSearch(payment, query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+
+  const haystack = [
+    getPaymentClientName(payment),
+    getPaymentAccountNumber(payment),
+    getPaymentServiceName(payment),
+    getPaymentStatusLabel(payment?.status),
+    formatAmount(payment.total_amount),
+    formatAmount(payment.commission),
+    formatPaymentDateHour(payment.created_at),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return haystack.includes(q);
+}
+
 function hasStoredProof(payment) {
   return Boolean(payment?.proof_bucket && payment?.proof_path);
 }
@@ -282,7 +309,9 @@ function ActionIconButton({
       ? "text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/40"
       : tone === "primary"
         ? "text-emerald-700 hover:bg-emerald-100 dark:text-emerald-400 dark:hover:bg-emerald-900/40"
-        : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800";
+        : tone === "info"
+          ? "text-sky-500 hover:bg-sky-100 dark:text-sky-400 dark:hover:bg-sky-900/40"
+          : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800";
 
   return (
     <span className="group relative inline-flex">
@@ -477,6 +506,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
     toDateInputValue(new Date())
   );
   const [customTo, setCustomTo] = useState(() => toDateInputValue(new Date()));
+  const [searchQuery, setSearchQuery] = useState("");
   const sendingWhatsAppPaymentIdsRef = useRef(new Set());
 
   const { can } = usePermissions();
@@ -494,16 +524,23 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
     !periodRange
       ? []
       : allPayments.filter((payment) => isPaymentInRange(payment, periodRange));
-  const periodSpentTotal = payments.reduce((sum, payment) => {
+  const filteredPayments = payments.filter((payment) =>
+    paymentMatchesSearch(payment, searchQuery)
+  );
+  const periodSpentTotal = filteredPayments.reduce((sum, payment) => {
     const amount = Number(payment.total_amount);
     if (Number.isNaN(amount)) return sum;
     return sum + amount;
   }, 0);
-  const periodEarningsTotal = payments.reduce((sum, payment) => {
+  const periodEarningsTotal = filteredPayments.reduce((sum, payment) => {
     const commission = Number(payment.commission);
     if (Number.isNaN(commission)) return sum;
     return sum + commission;
   }, 0);
+  const filteredPaymentsCount = filteredPayments.length;
+  const filteredPaymentsCountLabel = `${filteredPaymentsCount} ${
+    filteredPaymentsCount === 1 ? "pago" : "pagos"
+  }`;
   const periodLabel =
     PERIOD_OPTIONS.find((option) => option.value === period)?.label ?? "Período";
 
@@ -529,6 +566,10 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
 
   const handleCustomToChange = useCallback((event) => {
     setCustomTo(event.target.value);
+  }, []);
+
+  const handleSearchChange = useCallback((event) => {
+    setSearchQuery(event.target.value);
   }, []);
 
   useEffect(() => {
@@ -751,8 +792,8 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
               className={`${filterControlClass} flex items-center font-semibold tabular-nums`}
               role="status"
               aria-live="polite"
-              aria-label={`Total pagado por clientes en ${periodLabel}: ${formatAmount(periodSpentTotal)}, ${payments.length} ${payments.length === 1 ? "pago" : "pagos"}`}
-              title={`${payments.length} ${payments.length === 1 ? "pago" : "pagos"} · ${periodLabel}`}
+              aria-label={`Total pagado por clientes en ${periodLabel}: ${formatAmount(periodSpentTotal)}, ${filteredPaymentsCountLabel}`}
+              title={`${filteredPaymentsCountLabel} · ${periodLabel}`}
             >
               {formatAmount(periodSpentTotal)}
             </div>
@@ -766,8 +807,8 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
               className={`${filterControlClass} flex items-center font-semibold tabular-nums`}
               role="status"
               aria-live="polite"
-              aria-label={`Total ganancias por comisiones en ${periodLabel}: ${formatAmount(periodEarningsTotal)}, ${payments.length} ${payments.length === 1 ? "pago" : "pagos"}`}
-              title={`${payments.length} ${payments.length === 1 ? "pago" : "pagos"} · ${periodLabel}`}
+              aria-label={`Total ganancias por comisiones en ${periodLabel}: ${formatAmount(periodEarningsTotal)}, ${filteredPaymentsCountLabel}`}
+              title={`${filteredPaymentsCountLabel} · ${periodLabel}`}
             >
               {formatAmount(periodEarningsTotal)}
             </div>
@@ -781,6 +822,37 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
           className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-300"
         >
           {fetchError}
+        </div>
+      )}
+
+      {payments.length > 0 && (
+        <div className="relative">
+          <label htmlFor="payment-search" className="sr-only">
+            Buscar pagos por cliente, ID de servicio, estado o monto
+          </label>
+          <input
+            id="payment-search"
+            type="search"
+            value={searchQuery}
+            onChange={handleSearchChange}
+            placeholder="Buscar por cliente, ID de servicio, estado o monto..."
+            className="w-full rounded-full border border-zinc-300 bg-white pl-10 pr-4 py-2.5 text-zinc-900 placeholder-zinc-400 transition-all duration-200 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-500/50 dark:bg-zinc-700 dark:text-zinc-100 dark:placeholder-zinc-400 dark:focus:border-emerald-400 dark:focus:ring-emerald-500/30"
+            aria-label="Buscar pagos por cliente, ID de servicio, estado o monto"
+          />
+          <svg
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 dark:text-zinc-500"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
         </div>
       )}
 
@@ -823,9 +895,18 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                 : "No hay pagos en el período seleccionado."}
             </p>
           </div>
+        ) : filteredPayments.length === 0 ? (
+          <div
+            className="flex flex-col items-center justify-center gap-4 px-4 py-16 text-center"
+            role="status"
+          >
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              No se encontraron pagos que coincidan con la búsqueda.
+            </p>
+          </div>
         ) : isMobile ? (
           <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
-            {payments.map((payment) => (
+            {filteredPayments.map((payment) => (
               <li
                 key={payment.id}
                 className="space-y-3 px-4 py-4 transition-colors hover:bg-emerald-50/40 dark:hover:bg-emerald-950/10"
@@ -904,7 +985,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                 </tr>
               </thead>
               <tbody>
-                {payments.map((payment) => (
+                {filteredPayments.map((payment) => (
                   <tr
                     key={payment.id}
                     className="border-b border-zinc-100 last:border-0 transition-colors hover:bg-emerald-50/40 dark:border-zinc-800 dark:hover:bg-emerald-950/10"

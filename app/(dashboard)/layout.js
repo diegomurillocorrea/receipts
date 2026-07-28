@@ -110,7 +110,7 @@ function NavContent({ pathname, onNavClick, hideLogo, hideThemeToggle }) {
               height={56}
               className="h-12 w-12 shrink-0 object-contain"
             />
-            <span className="truncate text-xl font-bold tracking-tight text-emerald-700 dark:text-emerald-400">
+            <span className="truncate text-xl font-bold tracking-tight text-zinc-900 dark:text-white">
               Receipts
             </span>
           </Link>
@@ -391,7 +391,7 @@ export default function DashboardLayout({ children }) {
                 height={40}
                 className="h-9 w-9 shrink-0 object-contain"
               />
-              <span className="truncate text-lg font-bold tracking-tight text-emerald-700 dark:text-emerald-400">
+              <span className="truncate text-lg font-bold tracking-tight text-zinc-900 dark:text-white">
                 Receipts
               </span>
             </Link>

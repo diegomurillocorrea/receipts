@@ -280,6 +280,40 @@ export async function updatePaymentAction(id, payload) {
 }
 
 /**
+ * Reassign an existing payment to a different receipt (client/account).
+ * @param {string} paymentId
+ * @param {string} receiptId
+ * @returns {Promise<{ error: string | null }>}
+ */
+export async function reassignPaymentReceiptAction(paymentId, receiptId) {
+  const auth = await requirePermission("payments", "edit");
+  if (auth.error) return { error: auth.error };
+
+  if (!paymentId) {
+    return { error: "El ID del pago es requerido." };
+  }
+
+  const nextReceiptId = receiptId?.trim();
+  if (!nextReceiptId) {
+    return { error: "El recibo es requerido." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("payments")
+    .update({ receipt_id: nextReceiptId })
+    .eq("id", paymentId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/payments");
+  revalidatePath("/");
+  return { error: null };
+}
+
+/**
  * @param {string} id
  * @returns {Promise<{ error: string | null }>}
  */

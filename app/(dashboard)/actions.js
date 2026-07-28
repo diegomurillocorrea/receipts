@@ -1,10 +1,12 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requirePermission } from "@/lib/auth/permissions";
 
 const SEARCH_MIN_LENGTH = 2;
 const SEARCH_RECEIPTS_LIMIT = 25;
+const SEARCH_CLIENTS_LIMIT = 25;
 
 /**
  * @param {string} query
@@ -118,4 +120,100 @@ export async function searchReceiptsForHomeAction(serviceId, query) {
     return { error: error.message };
   }
   return { receipts: receipts ?? [] };
+}
+
+/**
+ * Search clients by name, last name, or phone number (for linking a new account).
+ * @param {string} query
+ * @returns {Promise<{ error: string | null; clients?: { id: string; name: string; last_name: string; phone_number: string | null }[] }>}
+ */
+export async function searchClientsForHomeAction(query) {
+  const auth = await requirePermission("payments", "view");
+  if (auth.error) return { error: auth.error };
+
+  const q = (query ?? "").trim();
+  if (q.length < SEARCH_MIN_LENGTH) {
+    return { clients: [] };
+  }
+
+  const supabase = await createClient();
+  const pattern = `%${q}%`;
+  const digits = q.replace(/\D/g, "");
+
+  const conditions = [
+    `name.ilike.${pattern}`,
+    `last_name.ilike.${pattern}`,
+    `phone_number.ilike.${pattern}`,
+  ];
+  if (digits.length >= 2) {
+    conditions.push(`phone_number.ilike.%${digits}%`);
+  }
+
+  const { data, error } = await supabase
+    .from("clients")
+    .select("id, name, last_name, phone_number")
+    .or(conditions.join(","))
+    .order("name", { ascending: true })
+    .limit(SEARCH_CLIENTS_LIMIT);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  return { clients: data ?? [] };
+}
+
+/**
+ * Link an account/bill number to an existing client for a service, then the UI
+ * navigates to /[serviceId]/[billId] to register the payment.
+ * @param {{ clientId: string; serviceId: string; accountReceiptNumber: string }} payload
+ * @returns {Promise<{ error: string | null }>}
+ */
+export async function linkAccountToClientAction(payload) {
+  const auth = await requirePermission("payments", "create");
+  if (auth.error) return { error: auth.error };
+
+  const clientId = (payload?.clientId ?? "").trim();
+  const serviceId = (payload?.serviceId ?? "").trim();
+  const accountReceiptNumber = (payload?.accountReceiptNumber ?? "").trim();
+
+  if (!clientId || !serviceId || !accountReceiptNumber) {
+    return {
+      error: "El cliente, servicio y número de cuenta son requeridos.",
+    };
+  }
+
+  const supabase = await createClient();
+
+  const { data: existing, error: existingError } = await supabase
+    .from("receipts")
+    .select("id")
+    .eq("service_id", serviceId)
+    .eq("account_receipt_number", accountReceiptNumber)
+    .limit(1)
+    .maybeSingle();
+
+  if (existingError) {
+    return { error: existingError.message };
+  }
+
+  if (existing) {
+    return { error: "Esta cuenta ya está vinculada a un cliente." };
+  }
+
+  const { error } = await supabase.from("receipts").insert({
+    client_id: clientId,
+    service_id: serviceId,
+    account_receipt_number: accountReceiptNumber,
+  });
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/clients");
+  revalidatePath("/");
+  revalidatePath(`/${serviceId}`);
+  revalidatePath(`/${serviceId}/${encodeURIComponent(accountReceiptNumber)}`);
+  return { error: null };
 }
