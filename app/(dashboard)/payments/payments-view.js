@@ -96,6 +96,17 @@ function getPaymentServiceId(payment) {
   return svc?.id ?? null;
 }
 
+function hasStoredProof(payment) {
+  return Boolean(payment?.proof_bucket && payment?.proof_path);
+}
+
+function canSendWhatsAppConfirmation(payment) {
+  return (
+    hasStoredProof(payment) &&
+    normalizePaymentStatus(payment?.status) === PAYMENT_STATUS_CANCELLED
+  );
+}
+
 function getPaymentServiceImageUrl(payment) {
   const receipt = normalizeReceiptRef(payment.receipt ?? payment.receipts);
   if (!receipt) return null;
@@ -145,6 +156,103 @@ function getStatusBadgeClass(status) {
 
 function isPaidStatus(status) {
   return normalizePaymentStatus(status) === PAYMENT_STATUS_PAID;
+}
+
+const PERIOD_OPTIONS = [
+  { value: "diario", label: "Diario" },
+  { value: "semanal", label: "Semanal" },
+  { value: "mensual", label: "Mensual" },
+  { value: "anual", label: "Anual" },
+  { value: "personalizado", label: "Personalizado" },
+];
+
+const filterControlClass =
+  "w-full min-w-40 rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 transition-all duration-200 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-emerald-400 dark:focus:ring-emerald-500/30";
+
+function startOfLocalDay(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function endOfLocalDay(date) {
+  const d = new Date(date);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+
+function toDateInputValue(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function parseLocalDateInput(value) {
+  if (!value) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  const date = new Date(year, month - 1, day);
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
+}
+
+function getPeriodRange(period, selectedDateValue, customFrom, customTo) {
+  if (period === "personalizado") {
+    const fromDate = parseLocalDateInput(customFrom);
+    const toDate = parseLocalDateInput(customTo);
+    if (!fromDate || !toDate) return null;
+
+    return {
+      from: startOfLocalDay(fromDate),
+      to: endOfLocalDay(toDate),
+    };
+  }
+
+  const selectedDate = parseLocalDateInput(selectedDateValue) ?? new Date();
+
+  if (period === "diario") {
+    return {
+      from: startOfLocalDay(selectedDate),
+      to: endOfLocalDay(selectedDate),
+    };
+  }
+
+  if (period === "semanal") {
+    const day = selectedDate.getDay();
+    const mondayOffset = day === 0 ? -6 : 1 - day;
+    const monday = new Date(selectedDate);
+    monday.setDate(selectedDate.getDate() + mondayOffset);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    return { from: startOfLocalDay(monday), to: endOfLocalDay(sunday) };
+  }
+
+  if (period === "mensual") {
+    const start = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+    const end = new Date(
+      selectedDate.getFullYear(),
+      selectedDate.getMonth() + 1,
+      0
+    );
+    return { from: startOfLocalDay(start), to: endOfLocalDay(end) };
+  }
+
+  if (period === "anual") {
+    const start = new Date(selectedDate.getFullYear(), 0, 1);
+    const end = new Date(selectedDate.getFullYear(), 11, 31);
+    return { from: startOfLocalDay(start), to: endOfLocalDay(end) };
+  }
+
+  return null;
+}
+
+function isPaymentInRange(payment, range) {
+  if (!range) return true;
+  if (!payment?.created_at) return false;
+  const createdAt = new Date(payment.created_at);
+  if (Number.isNaN(createdAt.getTime())) return false;
+  return createdAt >= range.from && createdAt <= range.to;
 }
 
 function StatusBadge({ status }) {
@@ -242,7 +350,7 @@ function PaymentActions({
       node: (
         <ActionIconButton
           label="Editar"
-          tone="primary"
+          tone="info"
           onClick={() => onEdit(payment)}
         >
           <Pencil className="h-4 w-4" aria-hidden />
@@ -266,24 +374,26 @@ function PaymentActions({
     });
   }
 
-  const isSendingWhatsApp = sendingWhatsAppPaymentIds.has(payment.id);
-  items.push({
-    id: "whatsapp-confirmation",
-    node: (
-      <ActionIconButton
-        label="Enviar confirmación de pago por WhatsApp"
-        tone="primary"
-        disabled={isSendingWhatsApp}
-        onClick={() => onSendWhatsAppConfirmation(payment)}
-      >
-        {isSendingWhatsApp ? (
-          <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
-        ) : (
-          <MessageCircleMore className="h-4 w-4" aria-hidden />
-        )}
-      </ActionIconButton>
-    ),
-  });
+  if (canSendWhatsAppConfirmation(payment)) {
+    const isSendingWhatsApp = sendingWhatsAppPaymentIds.has(payment.id);
+    items.push({
+      id: "whatsapp-confirmation",
+      node: (
+        <ActionIconButton
+          label="Enviar confirmación de pago por WhatsApp"
+          tone="primary"
+          disabled={isSendingWhatsApp}
+          onClick={() => onSendWhatsAppConfirmation(payment)}
+        >
+          {isSendingWhatsApp ? (
+            <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
+          ) : (
+            <MessageCircleMore className="h-4 w-4" aria-hidden />
+          )}
+        </ActionIconButton>
+      ),
+    });
+  }
 
   if (items.length === 0) {
     return <span className="text-sm text-zinc-400 dark:text-zinc-500">—</span>;
@@ -359,13 +469,67 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
   const [sendingWhatsAppPaymentIds, setSendingWhatsAppPaymentIds] = useState(
     () => new Set()
   );
+  const [period, setPeriod] = useState("diario");
+  const [selectedDate, setSelectedDate] = useState(() =>
+    toDateInputValue(new Date())
+  );
+  const [customFrom, setCustomFrom] = useState(() =>
+    toDateInputValue(new Date())
+  );
+  const [customTo, setCustomTo] = useState(() => toDateInputValue(new Date()));
   const sendingWhatsAppPaymentIdsRef = useRef(new Set());
 
   const { can } = usePermissions();
   const canEditPaymentPerm = can("payments", "edit");
   const canDeletePayment = can("payments", "delete");
 
-  const payments = initialPayments ?? [];
+  const allPayments = initialPayments ?? [];
+  const periodRange = getPeriodRange(
+    period,
+    selectedDate,
+    customFrom,
+    customTo
+  );
+  const payments =
+    !periodRange
+      ? []
+      : allPayments.filter((payment) => isPaymentInRange(payment, periodRange));
+  const periodSpentTotal = payments.reduce((sum, payment) => {
+    const amount = Number(payment.total_amount);
+    if (Number.isNaN(amount)) return sum;
+    return sum + amount;
+  }, 0);
+  const periodEarningsTotal = payments.reduce((sum, payment) => {
+    const commission = Number(payment.commission);
+    if (Number.isNaN(commission)) return sum;
+    return sum + commission;
+  }, 0);
+  const periodLabel =
+    PERIOD_OPTIONS.find((option) => option.value === period)?.label ?? "Período";
+
+  const handlePeriodChange = useCallback(
+    (event) => {
+      const nextPeriod = event.target.value;
+      setPeriod(nextPeriod);
+      if (nextPeriod === "personalizado") {
+        setCustomFrom(selectedDate);
+        setCustomTo(selectedDate);
+      }
+    },
+    [selectedDate]
+  );
+
+  const handleSelectedDateChange = useCallback((event) => {
+    setSelectedDate(event.target.value);
+  }, []);
+
+  const handleCustomFromChange = useCallback((event) => {
+    setCustomFrom(event.target.value);
+  }, []);
+
+  const handleCustomToChange = useCallback((event) => {
+    setCustomTo(event.target.value);
+  }, []);
 
   useEffect(() => {
     if (!copyFeedback && !whatsAppFeedback) return;
@@ -489,26 +653,125 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
 
   return (
     <div className="space-y-6 tablet:space-y-8">
-      <header className="flex items-start gap-3">
-        <span
-          className="mt-1 h-10 w-1 shrink-0 rounded-full bg-emerald-500"
-          aria-hidden
-        />
-        <div>
+      <header className="flex flex-col gap-4 tablet:flex-row tablet:items-center tablet:justify-between">
+        <div className="flex items-center gap-3">
+          <span
+            className="h-10 w-1 shrink-0 rounded-full bg-emerald-500"
+            aria-hidden
+          />
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 tablet:text-3xl">
             Pagos
           </h1>
-          <p className="mt-1.5 text-sm text-zinc-600 dark:text-zinc-400 tablet:text-base">
-            Consulta y gestiona los pagos registrados.
-            {payments.length > 0 ? (
-              <>
-                {" "}
-                <span className="font-medium text-emerald-700 dark:text-emerald-400">
-                  {payments.length} {payments.length === 1 ? "pago" : "pagos"}
-                </span>
-              </>
-            ) : null}
-          </p>
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+          <div className="min-w-40">
+            <label
+              htmlFor="payments-period"
+              className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+            >
+              Período
+            </label>
+            <select
+              id="payments-period"
+              value={period}
+              onChange={handlePeriodChange}
+              className={filterControlClass}
+              aria-label="Filtrar pagos por período"
+            >
+              {PERIOD_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {period === "personalizado" ? (
+            <>
+              <div className="min-w-40">
+                <label
+                  htmlFor="payments-period-from"
+                  className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Desde
+                </label>
+                <input
+                  id="payments-period-from"
+                  type="date"
+                  value={customFrom}
+                  onChange={handleCustomFromChange}
+                  max={customTo || undefined}
+                  className={filterControlClass}
+                  aria-label="Fecha inicial del período personalizado"
+                />
+              </div>
+              <div className="min-w-40">
+                <label
+                  htmlFor="payments-period-to"
+                  className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Hasta
+                </label>
+                <input
+                  id="payments-period-to"
+                  type="date"
+                  value={customTo}
+                  onChange={handleCustomToChange}
+                  min={customFrom || undefined}
+                  className={filterControlClass}
+                  aria-label="Fecha final del período personalizado"
+                />
+              </div>
+            </>
+          ) : (
+            <div className="min-w-40">
+              <label
+                htmlFor="payments-selected-date"
+                className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              >
+                Fecha
+              </label>
+              <input
+                id="payments-selected-date"
+                type="date"
+                value={selectedDate}
+                onChange={handleSelectedDateChange}
+                className={filterControlClass}
+                aria-label="Seleccionar fecha específica del período"
+              />
+            </div>
+          )}
+
+          <div className="min-w-40">
+            <p className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Total pagado
+            </p>
+            <div
+              className={`${filterControlClass} flex items-center font-semibold tabular-nums`}
+              role="status"
+              aria-live="polite"
+              aria-label={`Total pagado por clientes en ${periodLabel}: ${formatAmount(periodSpentTotal)}, ${payments.length} ${payments.length === 1 ? "pago" : "pagos"}`}
+              title={`${payments.length} ${payments.length === 1 ? "pago" : "pagos"} · ${periodLabel}`}
+            >
+              {formatAmount(periodSpentTotal)}
+            </div>
+          </div>
+
+          <div className="min-w-40">
+            <p className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Total ganancias
+            </p>
+            <div
+              className={`${filterControlClass} flex items-center font-semibold tabular-nums`}
+              role="status"
+              aria-live="polite"
+              aria-label={`Total ganancias por comisiones en ${periodLabel}: ${formatAmount(periodEarningsTotal)}, ${payments.length} ${payments.length === 1 ? "pago" : "pagos"}`}
+              title={`${payments.length} ${payments.length === 1 ? "pago" : "pagos"} · ${periodLabel}`}
+            >
+              {formatAmount(periodEarningsTotal)}
+            </div>
+          </div>
         </div>
       </header>
 
@@ -555,7 +818,9 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
               </svg>
             </div>
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              No hay pagos para mostrar.
+              {allPayments.length === 0
+                ? "No hay pagos para mostrar."
+                : "No hay pagos en el período seleccionado."}
             </p>
           </div>
         ) : isMobile ? (

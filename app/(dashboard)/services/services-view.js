@@ -215,41 +215,41 @@ export function ServicesView({ initialServices, initialCategories = [], fetchErr
 
   return (
     <div className="space-y-6 tablet:space-y-8">
-      <header className="flex flex-col gap-4 tablet:flex-row tablet:items-center tablet:justify-between">
-        <div className="flex items-start gap-3">
-          <span
-            className="mt-1 h-10 w-1 shrink-0 rounded-full bg-emerald-500"
-            aria-hidden
-          />
-          <div>
+      <header className="space-y-1.5">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <span
+              className="h-10 w-1 shrink-0 rounded-full bg-emerald-500"
+              aria-hidden
+            />
             <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 tablet:text-3xl">
               Servicios
             </h1>
-            <p className="mt-1.5 text-sm text-zinc-600 dark:text-zinc-400 tablet:text-base">
-              Tipos de recibos (ej. Agua, Electricidad, Internet). Agregar, editar o
-              eliminar servicios.
-              {services.length > 0 ? (
-                <>
-                  {" "}
-                  <span className="font-medium text-emerald-700 dark:text-emerald-400">
-                    {services.length}{" "}
-                    {services.length === 1 ? "servicio" : "servicios"}
-                  </span>
-                </>
-              ) : null}
-            </p>
           </div>
+          {canCreate && (
+            <button
+              type="button"
+              onClick={openCreate}
+              className="inline-flex h-11 w-fit shrink-0 items-center justify-center rounded-xl bg-emerald-600 px-5 text-sm font-medium text-white transition-all duration-200 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:bg-emerald-500 dark:hover:bg-emerald-600 dark:focus:ring-offset-zinc-900"
+              aria-label="Agregar servicio"
+            >
+              Agregar servicio
+            </button>
+          )}
         </div>
-        {canCreate && (
-        <button
-          type="button"
-          onClick={openCreate}
-          className="inline-flex h-11 min-w-[10rem] items-center justify-center rounded-xl bg-emerald-600 px-5 text-sm font-medium text-white transition-all duration-200 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 dark:bg-emerald-500 dark:hover:bg-emerald-600 dark:focus:ring-offset-zinc-900"
-          aria-label="Agregar servicio"
-        >
-          Agregar servicio
-        </button>
-        )}
+        <p className="pl-4 text-sm text-zinc-600 dark:text-zinc-400 tablet:text-base">
+          Tipos de recibos (ej. Agua, Electricidad, Internet). Agregar, editar o
+          eliminar servicios.
+          {services.length > 0 ? (
+            <>
+              {" "}
+              <span className="font-medium text-emerald-700 dark:text-emerald-400">
+                {services.length}{" "}
+                {services.length === 1 ? "servicio" : "servicios"}
+              </span>
+            </>
+          ) : null}
+        </p>
       </header>
 
       {fetchError && (
