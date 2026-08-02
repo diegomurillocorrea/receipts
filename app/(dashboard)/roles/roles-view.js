@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useCallback, useMemo } from "react";
+import { TableEditDeleteActions } from "@/components/table-edit-delete-actions";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
 import { usePermissions } from "../permissions-provider";
 import {
@@ -10,6 +11,14 @@ import {
   permissionKey,
 } from "@/lib/auth/permission-catalog";
 import { formatDateEsSv } from "@/lib/datetime";
+import {
+  tableHeadClass,
+  tableMobileListAltClass,
+  tableScrollBodyClass,
+  tableViewRootClass,
+  tableViewSectionClass,
+  tableViewSectionTitleClass,
+} from "@/lib/table-scroll-shell";
 import {
   createRoleAction,
   updateRoleAction,
@@ -227,8 +236,8 @@ export function RolesView({ initialRoles, fetchError }) {
     "w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-zinc-900 placeholder-zinc-400 transition-all duration-200 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-500 dark:focus:border-emerald-400 dark:focus:ring-emerald-500/30";
 
   return (
-    <div className="space-y-6 tablet:space-y-8">
-      <header className="space-y-1.5">
+    <div className={tableViewRootClass}>
+      <header className="shrink-0 space-y-1.5">
         <div className="flex items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
             <span
@@ -266,14 +275,14 @@ export function RolesView({ initialRoles, fetchError }) {
       {fetchError && (
         <div
           role="alert"
-          className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-300"
+          className="shrink-0 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-300"
         >
           {fetchError}
         </div>
       )}
 
       {roles.length > 0 && (
-        <div className="relative">
+        <div className="relative shrink-0">
           <label htmlFor="role-search" className="sr-only">
             Buscar roles
           </label>
@@ -303,8 +312,8 @@ export function RolesView({ initialRoles, fetchError }) {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="border-b-2 border-emerald-500 bg-emerald-50/40 px-4 py-3.5 dark:bg-emerald-950/20 tablet:px-6">
+      <div className={tableViewSectionClass}>
+        <div className={tableViewSectionTitleClass}>
           <h2 className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
             Lista de roles
           </h2>
@@ -356,7 +365,7 @@ export function RolesView({ initialRoles, fetchError }) {
             </button>
           </div>
         ) : isMobile ? (
-          <ul className="divide-y divide-zinc-200/80 dark:divide-zinc-800" role="list">
+          <ul className={tableMobileListAltClass} role="list">
             {filteredRoles.map((role, index) => (
               <li key={role.id} className="flex flex-col gap-2 px-4 py-4 transition-colors hover:bg-emerald-50/40 dark:hover:bg-emerald-950/10 tablet:px-6">
                 <div className="flex flex-col gap-0.5">
@@ -380,35 +389,22 @@ export function RolesView({ initialRoles, fetchError }) {
                     {(role.permissions ?? []).length} permiso(s) · {formatDateEsSv(role.created_at)}
                   </span>
                 </div>
-                <div className="flex gap-3 pt-2">
-                  {canEdit && (
-                    <button
-                      type="button"
-                      onClick={() => openEdit(role)}
-                      className="text-sm font-medium text-emerald-600 underline-offset-2 hover:underline dark:text-emerald-400"
-                      aria-label={`Editar ${role.name}`}
-                    >
-                      Editar
-                    </button>
-                  )}
-                  {canDelete && !role.is_system && (
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteClick(role)}
-                      className="text-sm font-medium text-red-600 underline-offset-2 hover:underline dark:text-red-400"
-                      aria-label={`Eliminar ${role.name}`}
-                    >
-                      Eliminar
-                    </button>
-                  )}
-                </div>
+                <TableEditDeleteActions
+                  canEdit={canEdit}
+                  canDelete={canDelete && !role.is_system}
+                  editLabel={`Editar ${role.name}`}
+                  deleteLabel={`Eliminar ${role.name}`}
+                  onEdit={() => openEdit(role)}
+                  onDelete={() => handleDeleteClick(role)}
+                  className="flex items-center gap-1 pt-2"
+                />
               </li>
             ))}
           </ul>
         ) : (
-          <div className="overflow-x-auto">
+          <div className={tableScrollBodyClass}>
             <table className="w-full text-left text-sm" role="grid">
-              <thead>
+              <thead className={tableHeadClass}>
                 <tr className="border-b border-zinc-200/80 dark:border-zinc-800">
                   <th className="w-12 px-2 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-4" scope="col">
                     #
@@ -457,28 +453,14 @@ export function RolesView({ initialRoles, fetchError }) {
                       {formatDateEsSv(role.created_at)}
                     </td>
                     <td className="px-4 py-3.5 tablet:px-6">
-                      <div className="flex gap-3">
-                        {canEdit && (
-                          <button
-                            type="button"
-                            onClick={() => openEdit(role)}
-                            className="font-medium text-emerald-600 underline-offset-2 hover:underline dark:text-emerald-400"
-                            aria-label={`Editar ${role.name}`}
-                          >
-                            Editar
-                          </button>
-                        )}
-                        {canDelete && !role.is_system && (
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteClick(role)}
-                            className="font-medium text-red-600 underline-offset-2 hover:underline dark:text-red-400"
-                            aria-label={`Eliminar ${role.name}`}
-                          >
-                            Eliminar
-                          </button>
-                        )}
-                      </div>
+                      <TableEditDeleteActions
+                        canEdit={canEdit}
+                        canDelete={canDelete && !role.is_system}
+                        editLabel={`Editar ${role.name}`}
+                        deleteLabel={`Eliminar ${role.name}`}
+                        onEdit={() => openEdit(role)}
+                        onDelete={() => handleDeleteClick(role)}
+                      />
                     </td>
                   </tr>
                 ))}

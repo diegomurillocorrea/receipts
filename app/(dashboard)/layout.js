@@ -10,6 +10,7 @@ import { Footer } from "@/components/footer";
 import { DaiegoLogo } from "@/components/daiego-logo";
 import { PermissionsProvider, usePermissions } from "./permissions-provider";
 import { HomePixelBlastBackground } from "@/components/home-pixel-blast-background";
+import { usesTableScrollShell } from "@/lib/table-scroll-shell";
 
 function useUser() {
   const [user, setUser] = useState(null);
@@ -325,13 +326,13 @@ export default function DashboardLayout({ children }) {
   const isHome = usesHomeShell(pathname);
 
   const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
+  const isTableScrollPage = usesTableScrollShell(pathname);
 
   if (isHome) {
-    const isHomeRoot = pathname === "/";
     return (
       <PermissionsProvider>
         <div className="fixed inset-0 flex flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950">
-          {isHomeRoot ? <HomePixelBlastBackground /> : null}
+          <HomePixelBlastBackground />
           <div className="absolute left-6 top-6 z-20">
             <MobileThemeToggle />
           </div>
@@ -460,10 +461,12 @@ export default function DashboardLayout({ children }) {
         />
       </aside>
 
-      {/* Main content: only this area scrolls; sidebar stays fixed. Flex column so footer sticks to bottom when content is short, or appears after content when long. */}
-      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto tablet:min-w-0">
+      {/* Main content: payments page scrolls only inside the table; other pages scroll here. */}
+      <main
+        className={`flex min-h-0 flex-1 flex-col tablet:min-w-0 ${isTableScrollPage ? "overflow-hidden" : "overflow-y-auto"}`}
+      >
         <div
-          className={`flex-1 w-full p-4 tablet:p-6 desktop:p-8 ${isMobile ? "pt-20" : ""} ${isTablet ? "pt-10" : ""}`}
+          className={`w-full flex-1 p-4 tablet:p-6 desktop:p-8 ${isTableScrollPage ? "flex min-h-0 flex-col overflow-hidden" : ""} ${isMobile ? "pt-20" : ""} ${isTablet ? "pt-10" : ""}`}
         >
           {children}
         </div>

@@ -3,6 +3,7 @@
 import { useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Check, Copy } from "lucide-react";
 import { DaiegoLogo } from "@/components/daiego-logo";
 import { ServiceLogoLink } from "@/components/service-logo-link";
 import { formatAmount } from "@/lib/money";
@@ -90,6 +91,40 @@ function ServicePlaceholder({ className = "h-full w-full" }) {
   );
 }
 
+function CopyServiceNumberButton({ value }) {
+  const [isCopied, setIsCopied] = useState(false);
+  const label = isCopied ? "Número de servicio copiado" : "Copiar número de servicio";
+
+  const handleClick = async () => {
+    const text = (value ?? "").trim();
+    if (!text) return;
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setIsCopied(true);
+      window.setTimeout(() => setIsCopied(false), 1500);
+    } catch {
+      setIsCopied(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-emerald-50 hover:text-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-300"
+      aria-label={label}
+      title={label}
+    >
+      {isCopied ? (
+        <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" aria-hidden />
+      ) : (
+        <Copy className="h-4 w-4" aria-hidden />
+      )}
+    </button>
+  );
+}
+
 export function PaymentRegisterView({
   receipt,
   service,
@@ -123,9 +158,6 @@ export function PaymentRegisterView({
   const serviceImageUrl = getServiceImageUrl(service);
   const clientLabel = getClientDisplayName(receipt?.clients);
   const accountNumber = (receipt?.account_receipt_number ?? "").trim();
-  const contextLabel = accountNumber
-    ? `${clientLabel} - ${accountNumber}`
-    : clientLabel;
 
   const commission =
     amount.trim() === "" ? 0 : computeCommission(Number(amount));
@@ -236,7 +268,7 @@ export function PaymentRegisterView({
   };
 
   return (
-    <div className="relative mx-auto flex w-full max-w-lg flex-1 flex-col px-1">
+    <div className="relative flex w-full flex-1 flex-col px-1">
       <Link
         href={backHref || `/${service.id}`}
         className="fixed left-16 top-4 z-20 inline-flex min-h-11 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50 dark:focus:ring-offset-zinc-950"
@@ -286,13 +318,22 @@ export function PaymentRegisterView({
           </ServiceLogoLink>
         </div>
 
-        <p className="mb-6 max-w-md px-1 text-center text-xl font-semibold tracking-tight text-zinc-900 whitespace-nowrap dark:text-zinc-50 sm:text-2xl">
-          {contextLabel}
-        </p>
+        <div className="mb-6 w-full text-center">
+          <h2 className="inline-flex items-center gap-x-1.5 whitespace-nowrap text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-2xl">
+            <span>{clientLabel}</span>
+            {accountNumber ? (
+              <>
+                <span aria-hidden>-</span>
+                <span>{accountNumber}</span>
+                <CopyServiceNumberButton value={accountNumber} />
+              </>
+            ) : null}
+          </h2>
+        </div>
 
         <form
           onSubmit={handleSubmit}
-          className="w-full space-y-4"
+          className="mx-auto w-full max-w-lg space-y-4"
           aria-label="Registrar pago"
           noValidate
         >

@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUserPermissions, hasPermission } from "@/lib/auth/permissions";
 import {
+  LEGACY_PAYMENT_STATUS_CANCELLED,
+  PAYMENT_STATUS_PAID,
+  PAYMENT_STATUS_SENT,
+  normalizePaymentStatus,
+} from "@/app/(dashboard)/payments/constants";
+import {
   getWhatsAppConfiguration,
   normalizeWhatsAppPhoneNumber,
   sendPaymentConfirmationTemplate,
@@ -13,8 +19,6 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const PAYMENT_STATUS_PAID = 1;
-const PAYMENT_STATUS_SENT = 3;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -161,7 +165,7 @@ export async function POST(_request: Request, context: RouteContext) {
     return errorResponse("No se encontró el pago solicitado.", 404);
   }
 
-  const paymentStatus = Number(payment.status);
+  const paymentStatus = normalizePaymentStatus(payment.status);
   const canConfirmByWhatsApp =
     paymentStatus === PAYMENT_STATUS_PAID ||
     paymentStatus === PAYMENT_STATUS_SENT;
@@ -224,6 +228,7 @@ export async function POST(_request: Request, context: RouteContext) {
   }
 
   // Claim before calling Meta. Staff may resend anytime for Pagado/Enviado.
+  // Include legacy Cancelado (2) so any leftover rows still claim as Pagado.
   const { data: claim, error: claimError } = await supabase
     .from("payments")
     .update({
@@ -232,7 +237,11 @@ export async function POST(_request: Request, context: RouteContext) {
       whatsapp_payment_notification_submitted_at: null,
     })
     .eq("id", paymentId)
-    .in("status", [PAYMENT_STATUS_PAID, PAYMENT_STATUS_SENT])
+    .in("status", [
+      PAYMENT_STATUS_PAID,
+      PAYMENT_STATUS_SENT,
+      LEGACY_PAYMENT_STATUS_CANCELLED,
+    ])
     .select("id")
     .maybeSingle();
 

@@ -3,9 +3,10 @@ const LOGO_DARK_SRC = "/logos/daiego-dark.svg"
 
 export function DaiegoLogo({
   className = "",
-  width = 180,
-  height = 54,
+  width = 140,
+  height = 100,
   priority = false,
+  variant = "auto",
 }) {
   const sharedProps = {
     alt: "DAIEGO",
@@ -13,6 +14,28 @@ export function DaiegoLogo({
     height,
     decoding: "async",
     ...(priority ? { fetchPriority: "high" } : {}),
+  }
+
+  const imageClassName = `shrink-0 object-contain ${className}`
+
+  if (variant === "dark") {
+    return (
+      <img
+        {...sharedProps}
+        src={LOGO_DARK_SRC}
+        className={imageClassName}
+      />
+    )
+  }
+
+  if (variant === "light") {
+    return (
+      <img
+        {...sharedProps}
+        src={LOGO_LIGHT_SRC}
+        className={imageClassName}
+      />
+    )
   }
 
   return (

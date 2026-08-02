@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useCallback, useEffect, useRef } from "react";
+import { ActionIconButton } from "@/components/action-icon-button";
 import { Copy, LoaderCircle, MessageCircleMore, Pencil, Trash2 } from "lucide-react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
 import {
@@ -13,6 +14,15 @@ import {
   toDateInputValueEsSv,
 } from "@/lib/datetime";
 import { formatAmount } from "@/lib/money";
+import {
+  tableHeadClass,
+  tableHeadCellClass,
+  tableMobileListClass,
+  tableScrollBodyClass,
+  tableViewRootClass,
+  tableViewSectionClass,
+  tableViewSectionTitleClass,
+} from "@/lib/table-scroll-shell";
 import { deletePaymentAction } from "./actions";
 import {
   PAYMENT_STATUS_REGISTERED,
@@ -106,10 +116,15 @@ function hasStoredProof(payment) {
   return Boolean(payment?.proof_bucket && payment?.proof_path);
 }
 
-function canSendWhatsAppConfirmation(payment) {
+function canShowWhatsAppConfirmation(payment) {
   if (!hasStoredProof(payment)) return false;
   const status = normalizePaymentStatus(payment?.status);
   return status === PAYMENT_STATUS_PAID || status === PAYMENT_STATUS_SENT;
+}
+
+function canSendWhatsAppConfirmation(payment) {
+  if (!hasStoredProof(payment)) return false;
+  return normalizePaymentStatus(payment?.status) === PAYMENT_STATUS_PAID;
 }
 
 function getPaymentServiceImageUrl(payment) {
@@ -274,46 +289,6 @@ function StatusBadge({ status }) {
   );
 }
 
-const actionIconBaseClass =
-  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 disabled:cursor-not-allowed disabled:opacity-50";
-
-function ActionIconButton({
-  label,
-  onClick,
-  disabled,
-  tone = "muted",
-  children,
-}) {
-  const toneClass =
-    tone === "danger"
-      ? "text-red-600 hover:bg-red-100 dark:text-red-400 dark:hover:bg-red-900/40"
-      : tone === "primary"
-        ? "text-emerald-700 hover:bg-emerald-100 dark:text-emerald-400 dark:hover:bg-emerald-900/40"
-        : tone === "info"
-          ? "text-sky-500 hover:bg-sky-100 dark:text-sky-400 dark:hover:bg-sky-900/40"
-          : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800";
-
-  return (
-    <span className="group relative inline-flex">
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={disabled}
-        className={`${actionIconBaseClass} ${toneClass}`}
-        aria-label={label}
-      >
-        {children}
-      </button>
-      <span
-        role="tooltip"
-        className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-zinc-900 px-2.5 py-1 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 dark:bg-zinc-100 dark:text-zinc-900"
-      >
-        {label}
-      </span>
-    </span>
-  );
-}
-
 function CopyIconButton({ value, label, onCopied, onError }) {
   const handleClick = async () => {
     const text = (value ?? "").trim();
@@ -383,15 +358,22 @@ function PaymentActions({
     });
   }
 
-  if (canSendWhatsAppConfirmation(payment)) {
+  if (canShowWhatsAppConfirmation(payment)) {
     const isSendingWhatsApp = sendingWhatsAppPaymentIds.has(payment.id);
+    const isAlreadySent =
+      normalizePaymentStatus(payment?.status) === PAYMENT_STATUS_SENT;
+    const isWhatsAppDisabled = isSendingWhatsApp || isAlreadySent;
     items.push({
       id: "whatsapp-confirmation",
       node: (
         <ActionIconButton
-          label="Enviar confirmación de pago por WhatsApp"
+          label={
+            isAlreadySent
+              ? "Confirmación de pago ya enviada por WhatsApp"
+              : "Enviar confirmación de pago por WhatsApp"
+          }
           tone="primary"
-          disabled={isSendingWhatsApp}
+          disabled={isWhatsAppDisabled}
           onClick={() => onSendWhatsAppConfirmation(payment)}
         >
           {isSendingWhatsApp ? (
@@ -409,7 +391,7 @@ function PaymentActions({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-1">
+    <div className="flex flex-nowrap items-center justify-center gap-0.5">
       {items.map((item) => (
         <span key={item.id} className="inline-flex">
           {item.node}
@@ -422,18 +404,24 @@ function PaymentActions({
 function ServicioCell({ payment, onCopied, onCopyError }) {
   const clientName = getPaymentClientName(payment);
   const accountNumber = getPaymentAccountNumber(payment) || "—";
+  const serviceName = getPaymentServiceName(payment);
   const imageUrl = getPaymentServiceImageUrl(payment);
 
   return (
     <div className="flex min-w-0 items-start gap-3 text-left">
       <ServiceImageThumb
         url={imageUrl}
-        size="h-11 w-11"
+        size="h-10 w-10"
         rounded="rounded-full"
       />
       <div className="min-w-0 flex-1 space-y-1">
+        {serviceName ? (
+          <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-50">
+            {serviceName}
+          </p>
+        ) : null}
         <div className="flex min-w-0 items-center gap-1">
-          <p className="min-w-0 truncate text-sm text-zinc-900 dark:text-zinc-50">
+          <p className="min-w-0 truncate text-sm text-zinc-600 dark:text-zinc-300">
             <span className="font-medium text-zinc-500 dark:text-zinc-400">
               Cliente:{" "}
             </span>
@@ -447,9 +435,9 @@ function ServicioCell({ payment, onCopied, onCopyError }) {
           />
         </div>
         <div className="flex min-w-0 items-center gap-1">
-          <p className="min-w-0 truncate text-sm text-zinc-900 dark:text-zinc-50">
+          <p className="min-w-0 truncate text-sm text-zinc-600 dark:text-zinc-300">
             <span className="font-medium text-zinc-500 dark:text-zinc-400">
-              ID Servicio:{" "}
+              ID:{" "}
             </span>
             {accountNumber}
           </p>
@@ -634,6 +622,16 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
     async (payment) => {
       const paymentId = payment?.id;
       if (!paymentId || sendingWhatsAppPaymentIdsRef.current.has(paymentId)) return;
+      if (!canSendWhatsAppConfirmation(payment)) {
+        setWhatsAppFeedback({
+          type: "error",
+          message:
+            normalizePaymentStatus(payment?.status) === PAYMENT_STATUS_SENT
+              ? "Esta confirmación ya fue enviada por WhatsApp."
+              : "Solo los pagos con estado Pagado pueden confirmarse por WhatsApp.",
+        });
+        return;
+      }
 
       sendingWhatsAppPaymentIdsRef.current.add(paymentId);
       setSendingWhatsAppPaymentIds((current) => new Set(current).add(paymentId));
@@ -706,8 +704,8 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
   };
 
   return (
-    <div className="space-y-6 tablet:space-y-8">
-      <header className="flex flex-col gap-4 tablet:flex-row tablet:items-center tablet:justify-between">
+    <div className={tableViewRootClass}>
+      <header className="flex shrink-0 flex-col gap-4 tablet:flex-row tablet:items-center tablet:justify-between">
         <div className="flex items-center gap-3">
           <span
             className="h-10 w-1 shrink-0 rounded-full bg-emerald-500"
@@ -832,14 +830,14 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
       {fetchError && (
         <div
           role="alert"
-          className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-300"
+          className="shrink-0 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-300"
         >
           {fetchError}
         </div>
       )}
 
       {payments.length > 0 && (
-        <div className="relative">
+        <div className="relative shrink-0">
           <label htmlFor="payment-search" className="sr-only">
             Buscar pagos por cliente, ID de servicio, estado o monto
           </label>
@@ -870,10 +868,10 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
       )}
 
       <section
-        className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+        className={tableViewSectionClass}
         aria-label="Lista de pagos"
       >
-        <div className="border-b-2 border-emerald-500 bg-emerald-50/40 px-4 py-3.5 dark:bg-emerald-950/20 tablet:px-6">
+        <div className={tableViewSectionTitleClass}>
           <h2 className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
             Lista de pagos
           </h2>
@@ -918,7 +916,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
             </p>
           </div>
         ) : isMobile ? (
-          <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <ul className={tableMobileListClass}>
             {filteredPayments.map((payment) => (
               <li
                 key={payment.id}
@@ -949,42 +947,50 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
             ))}
           </ul>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm" role="grid">
-              <thead>
+          <div className={tableScrollBodyClass}>
+            <table className="w-full table-fixed text-sm" role="grid">
+              <colgroup>
+                <col className="w-[34%]" />
+                <col className="w-[11%]" />
+                <col className="w-[11%]" />
+                <col className="w-[12%]" />
+                <col className="w-[19%]" />
+                <col className="w-[13%]" />
+              </colgroup>
+              <thead className={tableHeadClass}>
                 <tr className="border-b border-zinc-200/80 dark:border-zinc-800">
                   <th
-                    className="px-4 py-3.5 text-left font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6"
+                    className={`${tableHeadCellClass} px-4 py-3.5 text-left font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-5`}
                     scope="col"
                   >
                     Servicio
                   </th>
                   <th
-                    className="px-4 py-3.5 text-left font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6"
+                    className={`${tableHeadCellClass} px-4 py-3.5 text-center font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-5`}
                     scope="col"
                   >
                     Monto
                   </th>
                   <th
-                    className="px-4 py-3.5 text-left font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6"
+                    className={`${tableHeadCellClass} px-4 py-3.5 text-center font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-5`}
                     scope="col"
                   >
                     Comisión
                   </th>
                   <th
-                    className="px-4 py-3.5 text-left font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6"
+                    className={`${tableHeadCellClass} px-4 py-3.5 text-center font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-5`}
                     scope="col"
                   >
                     Estado
                   </th>
                   <th
-                    className="px-4 py-3.5 text-left font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6"
+                    className={`${tableHeadCellClass} px-4 py-3.5 text-center font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-5`}
                     scope="col"
                   >
                     Fecha / Hora
                   </th>
                   <th
-                    className="px-4 py-3.5 text-left font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-6"
+                    className={`${tableHeadCellClass} px-4 py-3.5 text-center font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-5`}
                     scope="col"
                   >
                     Acciones
@@ -997,30 +1003,32 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                     key={payment.id}
                     className="border-b border-zinc-100 last:border-0 transition-colors hover:bg-emerald-50/40 dark:border-zinc-800 dark:hover:bg-emerald-950/10"
                   >
-                    <td className="max-w-md px-4 py-3.5 tablet:px-6">
+                    <td className="min-w-0 px-4 py-3.5 text-left tablet:px-5">
                       <ServicioCell
                         payment={payment}
                         onCopied={handleCopied}
                         onCopyError={handleCopyError}
                       />
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3.5 font-medium text-zinc-900 dark:text-zinc-50 tablet:px-6">
+                    <td className="whitespace-nowrap px-4 py-3.5 text-center font-medium tabular-nums text-zinc-900 dark:text-zinc-50 tablet:px-5">
                       {formatAmount(payment.total_amount)}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3.5 text-zinc-600 dark:text-zinc-400 tablet:px-6">
+                    <td className="whitespace-nowrap px-4 py-3.5 text-center tabular-nums text-zinc-600 dark:text-zinc-400 tablet:px-5">
                       {formatAmount(payment.commission)}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3.5 tablet:px-6">
+                    <td className="whitespace-nowrap px-4 py-3.5 text-center tablet:px-5">
                       <StatusBadge status={payment.status} />
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3.5 text-zinc-600 dark:text-zinc-400 tablet:px-6">
+                    <td className="whitespace-nowrap px-4 py-3.5 text-center text-zinc-600 dark:text-zinc-400 tablet:px-5">
                       {formatDateTimeEsSv(payment.created_at)}
                     </td>
-                    <td className="px-4 py-3.5 tablet:px-6">
-                      <PaymentActions
-                        payment={payment}
-                        {...actionHandlers}
-                      />
+                    <td className="whitespace-nowrap px-4 py-3.5 text-center tablet:px-5">
+                      <div className="flex w-full justify-center">
+                        <PaymentActions
+                          payment={payment}
+                          {...actionHandlers}
+                        />
+                      </div>
                     </td>
                   </tr>
                 ))}

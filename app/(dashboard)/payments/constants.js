@@ -12,7 +12,7 @@ export const PAYMENT_STATUS_SENT = 3;
 export const PAYMENT_STATUS_PENDING = PAYMENT_STATUS_REGISTERED;
 
 /** Legacy value previously labeled "Cancelado"; treated as Pagado. */
-const LEGACY_PAYMENT_STATUS_CANCELLED = 2;
+export const LEGACY_PAYMENT_STATUS_CANCELLED = 2;
 
 export const PAYMENT_STATUSES = [
   PAYMENT_STATUS_REGISTERED,

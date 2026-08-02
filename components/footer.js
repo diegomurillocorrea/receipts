@@ -9,7 +9,11 @@ export function Footer() {
       role="contentinfo"
       aria-label="Pie de página"
     >
-      <DaiegoLogoMark markClassName="h-8" />
+      <DaiegoLogoMark
+        markClassName="h-8"
+        tile="dark"
+        className="rounded-md p-1"
+      />
       <span className="text-sm font-medium" aria-label="DAIEGO LLC copyright 2026">
         DAIEGO LLC © 2026
       </span>

@@ -2,9 +2,20 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useCallback, useEffect, useMemo } from "react";
+import { ActionIconButton } from "@/components/action-icon-button";
+import { TableEditDeleteActions } from "@/components/table-edit-delete-actions";
+import { Pencil, Trash2 } from "lucide-react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
 import { usePermissions } from "../permissions-provider";
 import { formatDateEsSv } from "@/lib/datetime";
+import {
+  tableHeadClass,
+  tableMobileListAltClass,
+  tableScrollBodyClass,
+  tableViewRootClass,
+  tableViewSectionClass,
+  tableViewSectionTitleClass,
+} from "@/lib/table-scroll-shell";
 import { formatElSalvadorPhoneDisplay } from "@/lib/phone";
 import {
   createClientAction,
@@ -399,8 +410,8 @@ export function ClientsView({ initialClients, fetchError }) {
     "w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-zinc-900 placeholder-zinc-400 transition-all duration-200 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-500 dark:focus:border-emerald-400 dark:focus:ring-emerald-500/30";
 
   return (
-    <div className="space-y-6 tablet:space-y-8">
-      <header className="space-y-1.5">
+    <div className={tableViewRootClass}>
+      <header className="shrink-0 space-y-1.5">
         <div className="flex items-center justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
             <span
@@ -439,14 +450,14 @@ export function ClientsView({ initialClients, fetchError }) {
       {fetchError && (
         <div
           role="alert"
-          className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-300"
+          className="shrink-0 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-300"
         >
           {fetchError}
         </div>
       )}
 
       {clients.length > 0 && (
-        <div className="relative">
+        <div className="relative shrink-0">
           <label htmlFor="client-search" className="sr-only">
             Buscar por nombre, apellido o teléfono
           </label>
@@ -476,8 +487,8 @@ export function ClientsView({ initialClients, fetchError }) {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="border-b-2 border-emerald-500 bg-emerald-50/40 px-4 py-3.5 dark:bg-emerald-950/20 tablet:px-6">
+      <div className={tableViewSectionClass}>
+        <div className={tableViewSectionTitleClass}>
           <h2 className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
             Lista de clientes
           </h2>
@@ -527,7 +538,7 @@ export function ClientsView({ initialClients, fetchError }) {
             </button>
           </div>
         ) : isMobile ? (
-          <ul className="divide-y divide-zinc-200/80 dark:divide-zinc-800" role="list">
+          <ul className={tableMobileListAltClass} role="list">
             {filteredClients.map((client, index) => (
               <li
                 key={client.id}
@@ -552,37 +563,22 @@ export function ClientsView({ initialClients, fetchError }) {
                     {formatDateEsSv(client.created_at)}
                   </span>
                 </div>
-                {(canEdit || canDelete) && (
-                <div className="flex gap-3 pt-2">
-                  {canEdit && (
-                  <button
-                    type="button"
-                    onClick={() => openEdit(client)}
-                    className="text-sm font-medium text-emerald-600 underline-offset-2 hover:underline dark:text-emerald-400"
-                    aria-label={`Editar ${client.name} ${client.last_name}`}
-                  >
-                    Editar
-                  </button>
-                  )}
-                  {canDelete && (
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteClick(client)}
-                    className="text-sm font-medium text-red-600 underline-offset-2 hover:underline dark:text-red-400"
-                    aria-label={`Eliminar ${client.name} ${client.last_name}`}
-                  >
-                    Eliminar
-                  </button>
-                  )}
-                </div>
-                )}
+                <TableEditDeleteActions
+                  canEdit={canEdit}
+                  canDelete={canDelete}
+                  editLabel={`Editar ${client.name} ${client.last_name}`}
+                  deleteLabel={`Eliminar ${client.name} ${client.last_name}`}
+                  onEdit={() => openEdit(client)}
+                  onDelete={() => handleDeleteClick(client)}
+                  className="flex items-center gap-1 pt-2"
+                />
               </li>
             ))}
           </ul>
         ) : (
-          <div className="overflow-x-auto">
+          <div className={tableScrollBodyClass}>
             <table className="w-full text-left text-sm" role="grid">
-              <thead>
+              <thead className={tableHeadClass}>
                 <tr className="border-b border-zinc-200/80 dark:border-zinc-800">
                   <th className="w-12 px-2 py-3.5 font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-4" scope="col">
                     #
@@ -635,28 +631,14 @@ export function ClientsView({ initialClients, fetchError }) {
                     </td>
                     {(canEdit || canDelete) && (
                     <td className="px-4 py-3.5 tablet:px-6">
-                      <div className="flex gap-3">
-                        {canEdit && (
-                        <button
-                          type="button"
-                          onClick={() => openEdit(client)}
-                          className="font-medium text-emerald-600 underline-offset-2 hover:underline dark:text-emerald-400"
-                          aria-label={`Editar ${client.name} ${client.last_name}`}
-                        >
-                          Editar
-                        </button>
-                        )}
-                        {canDelete && (
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteClick(client)}
-                          className="font-medium text-red-600 underline-offset-2 hover:underline dark:text-red-400"
-                          aria-label={`Eliminar ${client.name} ${client.last_name}`}
-                        >
-                          Eliminar
-                        </button>
-                        )}
-                      </div>
+                      <TableEditDeleteActions
+                        canEdit={canEdit}
+                        canDelete={canDelete}
+                        editLabel={`Editar ${client.name} ${client.last_name}`}
+                        deleteLabel={`Eliminar ${client.name} ${client.last_name}`}
+                        onEdit={() => openEdit(client)}
+                        onDelete={() => handleDeleteClick(client)}
+                      />
                     </td>
                     )}
                   </tr>
@@ -924,34 +906,32 @@ export function ClientsView({ initialClients, fetchError }) {
                                     </button>
                                   </>
                                 ) : (
-                                  <>
-                                    <button
-                                      type="button"
+                                  <div className="flex items-center gap-1">
+                                    <ActionIconButton
+                                      label={`Editar ${item.accountNumber}`}
+                                      tone="info"
                                       onClick={() => handleStartEdit(item)}
                                       disabled={isUnlinking}
-                                      className="text-xs font-medium text-emerald-600 hover:underline disabled:opacity-50 dark:text-emerald-400"
-                                      aria-label={`Editar ${item.accountNumber}`}
                                     >
-                                      Editar
-                                    </button>
-                                    <button
-                                      type="button"
+                                      <Pencil className="h-4 w-4" aria-hidden />
+                                    </ActionIconButton>
+                                    <ActionIconButton
+                                      label={
+                                        isEditing
+                                          ? `Desvincular ${item.accountNumber}`
+                                          : `Quitar ${item.accountNumber}`
+                                      }
+                                      tone="danger"
                                       onClick={() =>
                                         isEditing
                                           ? handleUnlinkReceipt(item.id)
                                           : handleRemovePendingService(item.id)
                                       }
                                       disabled={isEditing && isUnlinking}
-                                      className="text-xs font-medium text-red-600 hover:underline disabled:opacity-50 dark:text-red-400"
-                                      aria-label={`Quitar ${item.accountNumber}`}
                                     >
-                                      {isEditing
-                                        ? isUnlinking
-                                          ? "…"
-                                          : "Desvincular"
-                                        : "Quitar"}
-                                    </button>
-                                  </>
+                                      <Trash2 className="h-4 w-4" aria-hidden />
+                                    </ActionIconButton>
+                                  </div>
                                 )}
                               </div>
                             </li>
