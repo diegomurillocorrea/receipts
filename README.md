@@ -24,21 +24,27 @@ the server; no access token is exposed to the browser. Add these server-only val
 
 ```env
 WHATSAPP_ACCESS_TOKEN=
-WHATSAPP_PHONE_NUMBER_ID=
-WHATSAPP_GRAPH_API_VERSION=v23.0
-WHATSAPP_TEMPLATE_NAME=payment_success
+WHATSAPP_PHONE_NUMBER_ID=548106841724229
+WHATSAPP_GRAPH_API_VERSION=v25.0
+WHATSAPP_TEMPLATE_NAME=daiego_payment_success
 WHATSAPP_TEMPLATE_LANGUAGE=es
 ```
 
-Create and approve the `payment_success` template in Meta with Spanish body parameters in
-this order: `{{1}}` client name, `{{2}}` formatted payment amount, and `{{3}}` service name.
-The default text is: “Hola {{1}}. Le confirmamos que el pago de {{2}} correspondiente al
-servicio “{{3}}” fue recibido exitosamente. Gracias por confiar en nosotros.”
+Use the DAIEGO business phone (`+503 7528 7675`, Phone number ID `548106841724229`), not
+the Meta test number. Create and approve `daiego_payment_success` (Spanish / `es`) with
+body parameters in this order:
 
-Apply the Supabase migrations before testing. In Payments, use the message icon for a
-payment with status **Pagado** and a client number stored with an explicit international
-prefix (for example `+503 7000-0000`). A success message means Meta accepted the template
-for processing; delivery is tracked separately through future webhooks.
+1. `{{1}}` client full name
+2. `{{2}}` service name
+3. `{{3}}` service / account number
+4. `{{4}}` amount (without `$`; the template already includes `$`)
+5. `{{5}}` commission (without `$`)
+6. `{{6}}` total = amount + commission (without `$`)
+
+Apply the Supabase migrations before testing. In Payments, use the WhatsApp icon for a
+payment with status **Pagado** (or **Enviado** to resend), a stored voucher, and a
+client number stored as `503XXXXXXXX` (no leading `+`). A success message means Meta
+accepted the template for processing.
 
 You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
 

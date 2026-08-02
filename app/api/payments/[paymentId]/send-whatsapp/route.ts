@@ -13,7 +13,7 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const PAYMENT_STATUS_CANCELLED = 2;
+const PAYMENT_STATUS_PAID = 1;
 const PAYMENT_STATUS_SENT = 3;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -76,6 +76,18 @@ function formatMoneyForTemplate(
 
   // The approved Meta template itself contains the $ symbol.
   return amount.toFixed(2);
+}
+
+function formatTotalForTemplate(
+  amount: number | string | null | undefined,
+  commission: number | string | null | undefined,
+): string | null {
+  const parsedAmount = Number(amount);
+  const parsedCommission = Number(commission);
+  if (!Number.isFinite(parsedAmount) || parsedAmount < 0) return null;
+  if (!Number.isFinite(parsedCommission) || parsedCommission < 0) return null;
+
+  return (parsedAmount + parsedCommission).toFixed(2);
 }
 
 async function markNotificationFailed(paymentId: string) {
@@ -151,22 +163,13 @@ export async function POST(_request: Request, context: RouteContext) {
 
   const paymentStatus = Number(payment.status);
   const canConfirmByWhatsApp =
-    paymentStatus === PAYMENT_STATUS_CANCELLED ||
+    paymentStatus === PAYMENT_STATUS_PAID ||
     paymentStatus === PAYMENT_STATUS_SENT;
   if (!canConfirmByWhatsApp) {
     return errorResponse(
-      "Solo los pagos con estado Cancelado o Enviado pueden confirmarse por WhatsApp.",
+      "Solo los pagos con estado Pagado o Enviado pueden confirmarse por WhatsApp.",
       422,
     );
-  }
-
-  const isWhatsAppResend = paymentStatus === PAYMENT_STATUS_SENT;
-  if (
-    !isWhatsAppResend &&
-    (payment.whatsapp_payment_notification_submitted_at ||
-      payment.whatsapp_payment_notification_status)
-  ) {
-    return errorResponse("Esta confirmación de pago ya fue procesada.", 409);
   }
 
   const receipt = one(payment.receipts);
@@ -179,6 +182,10 @@ export async function POST(_request: Request, context: RouteContext) {
   const serviceNumber = requiredText(receipt?.account_receipt_number);
   const formattedAmount = formatMoneyForTemplate(payment.total_amount);
   const formattedCommission = formatMoneyForTemplate(payment.commission);
+  const formattedTotal = formatTotalForTemplate(
+    payment.total_amount,
+    payment.commission,
+  );
   const phoneNumber = normalizeWhatsAppPhoneNumber(client?.phone_number);
 
   if (!serviceNumber) {
@@ -190,12 +197,12 @@ export async function POST(_request: Request, context: RouteContext) {
   if (payment.commission == null || !formattedCommission) {
     return errorResponse("El pago no tiene una comisión válida configurada.", 422);
   }
-  if (!clientName || !formattedAmount) {
+  if (!clientName || !formattedAmount || !formattedTotal) {
     return errorResponse("El pago no tiene la información necesaria para enviar la confirmación.", 422);
   }
   if (!phoneNumber) {
     return errorResponse(
-      "El cliente necesita un número de WhatsApp internacional válido (por ejemplo, +503 7000-0000).",
+      "El cliente necesita un número de WhatsApp válido (por ejemplo, 50370000000).",
       422,
     );
   }
@@ -216,27 +223,16 @@ export async function POST(_request: Request, context: RouteContext) {
     return errorResponse("No fue posible preparar el envío. Inténtalo más tarde.", 500);
   }
 
-  // Claim the notification before calling Meta. Only one concurrent request can win.
-  // Enviado payments may resend; Cancelado is first-send only (null notification fields).
-  let claimQuery = supabase
+  // Claim before calling Meta. Staff may resend anytime for Pagado/Enviado.
+  const { data: claim, error: claimError } = await supabase
     .from("payments")
     .update({
       whatsapp_payment_notification_status: "PENDING",
       whatsapp_payment_notification_message_id: null,
       whatsapp_payment_notification_submitted_at: null,
     })
-    .eq("id", paymentId);
-
-  if (isWhatsAppResend) {
-    claimQuery = claimQuery.eq("status", PAYMENT_STATUS_SENT);
-  } else {
-    claimQuery = claimQuery
-      .eq("status", PAYMENT_STATUS_CANCELLED)
-      .is("whatsapp_payment_notification_status", null)
-      .is("whatsapp_payment_notification_submitted_at", null);
-  }
-
-  const { data: claim, error: claimError } = await claimQuery
+    .eq("id", paymentId)
+    .in("status", [PAYMENT_STATUS_PAID, PAYMENT_STATUS_SENT])
     .select("id")
     .maybeSingle();
 
@@ -249,7 +245,10 @@ export async function POST(_request: Request, context: RouteContext) {
     return errorResponse("No fue posible preparar el envío. Inténtalo más tarde.", 500);
   }
   if (!claim) {
-    return errorResponse("Esta confirmación de pago ya fue procesada.", 409);
+    return errorResponse(
+      "No se pudo preparar el envío de WhatsApp para este pago. Recarga e inténtalo de nuevo.",
+      409,
+    );
   }
 
   try {
@@ -259,6 +258,7 @@ export async function POST(_request: Request, context: RouteContext) {
       serviceNumber,
       formattedAmount,
       formattedCommission,
+      formattedTotal,
     });
 
     const { error: updateError } = await supabase

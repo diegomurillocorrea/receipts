@@ -4,6 +4,8 @@ import { useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DaiegoLogo } from "@/components/daiego-logo";
+import { ServiceLogoLink } from "@/components/service-logo-link";
+import { formatAmount } from "@/lib/money";
 import {
   createPaymentAction,
   uploadPaymentProofAction,
@@ -36,18 +38,8 @@ function computeCommission(totalAmount) {
   return Math.floor(n / 50) + 1;
 }
 
-function formatAmount(value) {
-  const n = Number(value);
-  if (Number.isNaN(n)) {
-    return new Intl.NumberFormat("es-SV", {
-      style: "currency",
-      currency: "USD",
-    }).format(0);
-  }
-  return new Intl.NumberFormat("es-SV", {
-    style: "currency",
-    currency: "USD",
-  }).format(n);
+function formatCommissionAmount(value) {
+  return formatAmount(value, { fallback: formatAmount(0) });
 }
 
 function getDefaultPaymentMethodId(methods) {
@@ -126,6 +118,8 @@ export function PaymentRegisterView({
   const [isSuccess, setIsSuccess] = useState(false);
 
   const serviceName = service?.name?.trim() || "Servicio";
+  const serviceLink =
+    typeof service?.link === "string" ? service.link.trim() : "";
   const serviceImageUrl = getServiceImageUrl(service);
   const clientLabel = getClientDisplayName(receipt?.clients);
   const accountNumber = (receipt?.account_receipt_number ?? "").trim();
@@ -279,10 +273,7 @@ export function PaymentRegisterView({
               className="h-full w-full object-contain"
             />
           </div>
-          <div
-            className="flex h-[7.5rem] w-[7.5rem] shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900 tablet:h-36 tablet:w-36"
-            title={serviceName}
-          >
+          <ServiceLogoLink href={serviceLink} serviceName={serviceName}>
             {serviceImageUrl ? (
               <img
                 src={serviceImageUrl}
@@ -292,10 +283,10 @@ export function PaymentRegisterView({
             ) : (
               <ServicePlaceholder className="h-full w-full" />
             )}
-          </div>
+          </ServiceLogoLink>
         </div>
 
-        <p className="mb-6 max-w-md text-center text-base font-semibold text-zinc-900 dark:text-zinc-50">
+        <p className="mb-6 max-w-md px-1 text-center text-xl font-semibold tracking-tight text-zinc-900 whitespace-nowrap dark:text-zinc-50 sm:text-2xl">
           {contextLabel}
         </p>
 
@@ -339,11 +330,11 @@ export function PaymentRegisterView({
               <input
                 id={commissionId}
                 type="text"
-                value={formatAmount(commission)}
+                value={formatCommissionAmount(commission)}
                 readOnly
                 tabIndex={0}
                 className={`${inputClassName} cursor-default bg-zinc-50 dark:bg-zinc-800/80`}
-                aria-label={`Comisión calculada: ${formatAmount(commission)}`}
+                aria-label={`Comisión calculada: ${formatCommissionAmount(commission)}`}
               />
             </div>
           </div>

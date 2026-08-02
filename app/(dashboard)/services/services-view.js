@@ -3,8 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
-import { usePermissions } from "../permissions-provider";
+import { formatDateEsSv } from "@/lib/datetime";
 import { sortServicesByCategory } from "@/lib/services/sort-by-category";
+import { usePermissions } from "../permissions-provider";
 import {
   createServiceAction,
   updateServiceAction,
@@ -12,16 +13,6 @@ import {
   uploadServiceImageAction,
   removeServiceImageAction,
 } from "./actions";
-
-function formatDate(isoString) {
-  if (!isoString) return "—";
-  const d = new Date(isoString);
-  return d.toLocaleDateString("es-SV", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
 
 function getServiceImageUrl(service) {
   if (!service?.image_bucket || !service?.image_path) return null;
@@ -388,7 +379,7 @@ export function ServicesView({ initialServices, initialCategories = [], fetchErr
                       </a>
                     )}
                     <span className="text-xs text-zinc-500 dark:text-zinc-500">
-                      {formatDate(service.created_at)}
+                      {formatDateEsSv(service.created_at)}
                     </span>
                   </div>
                 </div>
@@ -500,7 +491,7 @@ export function ServicesView({ initialServices, initialCategories = [], fetchErr
                       )}
                     </td>
                     <td className="px-4 py-3.5 text-zinc-500 dark:text-zinc-500 tablet:px-6">
-                      {formatDate(service.created_at)}
+                      {formatDateEsSv(service.created_at)}
                     </td>
                     {(canEdit || canDelete) && (
                     <td className="px-4 py-3.5 tablet:px-6">

@@ -80,7 +80,7 @@ async function PaymentEditPageContent({ serviceId, billId, paymentId }) {
     supabase
       .from("payments")
       .select(
-        "id, receipt_id, payment_method_id, total_amount, commission, status, proof_bucket, proof_path, created_at, receipts(id, account_receipt_number, service_id, clients(name, last_name), services(id, name, image_bucket, image_path))"
+        "id, receipt_id, payment_method_id, total_amount, commission, status, proof_bucket, proof_path, created_at, receipts(id, account_receipt_number, service_id, clients(name, last_name), services(id, name, link, image_bucket, image_path))"
       )
       .eq("id", paymentId)
       .maybeSingle(),
@@ -168,13 +168,13 @@ async function PaymentRegisterPageContent({ serviceId, billId }) {
   const [serviceResult, receiptResult, methodsResult] = await Promise.all([
     supabase
       .from("services")
-      .select("id, name, image_bucket, image_path")
+      .select("id, name, link, image_bucket, image_path")
       .eq("id", serviceId)
       .maybeSingle(),
     supabase
       .from("receipts")
       .select(
-        "id, account_receipt_number, service_id, clients(name, last_name), services(id, name, image_bucket, image_path)"
+        "id, account_receipt_number, service_id, clients(name, last_name), services(id, name, link, image_bucket, image_path)"
       )
       .eq("service_id", serviceId)
       .eq("account_receipt_number", decodedBillId)

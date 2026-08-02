@@ -4,6 +4,9 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DaiegoLogo } from "@/components/daiego-logo";
+import { DaiegoLogoMark } from "@/components/daiego-logo-mark";
+import { ServiceLogoLink } from "@/components/service-logo-link";
+import { formatElSalvadorPhoneDisplay } from "@/lib/phone";
 import {
   linkAccountToClientAction,
   searchClientsForHomeAction,
@@ -148,7 +151,7 @@ function getClientFullName(client) {
 
 function ClientSearchResultRow({ client, isSelected, onSelect }) {
   const fullName = getClientFullName(client);
-  const phone = (client?.phone_number ?? "").trim();
+  const phone = formatElSalvadorPhoneDisplay(client?.phone_number);
   const label = phone ? `${fullName} · ${phone}` : fullName;
 
   return (
@@ -212,6 +215,7 @@ function HomeSearchView({ service }) {
   const paymentId = (searchParams.get("paymentId") ?? "").trim();
   const isChangingPaymentClient = Boolean(paymentId);
   const serviceName = service.name?.trim() || "Servicio";
+  const serviceLink = typeof service.link === "string" ? service.link.trim() : "";
   const serviceImageUrl = getServiceImageUrl(service);
   const trimmedQuery = searchQuery.trim();
   const trimmedClientQuery = clientSearchQuery.trim();
@@ -554,10 +558,7 @@ function HomeSearchView({ service }) {
               className="h-full w-full object-contain"
             />
           </div>
-          <div
-            className="flex h-[7.5rem] w-[7.5rem] shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900 tablet:h-36 tablet:w-36"
-            title={serviceName}
-          >
+          <ServiceLogoLink href={serviceLink} serviceName={serviceName}>
             {serviceImageUrl ? (
               <img
                 src={serviceImageUrl}
@@ -567,7 +568,7 @@ function HomeSearchView({ service }) {
             ) : (
               <ServicePlaceholder className="h-full w-full" />
             )}
-          </div>
+          </ServiceLogoLink>
         </div>
 
         <p className="mb-4 max-w-md text-center text-sm font-medium text-zinc-600 dark:text-zinc-300 tablet:text-base">
@@ -723,7 +724,7 @@ export function HomeViewSkeleton() {
       aria-busy="true"
       aria-live="polite"
     >
-      <div className="mb-6 h-14 w-[min(100%,16vw)] min-w-36 animate-pulse rounded-2xl bg-zinc-200 dark:bg-zinc-800 tablet:mb-8 tablet:h-20 tablet:min-w-44" />
+      <div className="mb-6 aspect-[7/5] w-[min(100%,16vw)] min-w-36 animate-pulse rounded-2xl bg-zinc-200 dark:bg-zinc-800 tablet:mb-8 tablet:min-w-44" />
       <div className="mb-8 h-7 w-72 max-w-full animate-pulse rounded-lg bg-zinc-200 dark:bg-zinc-800 tablet:mb-10" />
       <p className="sr-only">Cargando servicios…</p>
       <ul
@@ -747,15 +748,14 @@ export function HomeView({ services, fetchError }) {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col items-center px-1 pb-10 pt-8 tablet:pt-12 desktop:pt-14">
       <div
-        className="mb-6 flex w-[min(100%,16vw)] min-w-36 items-center justify-center tablet:mb-8 tablet:min-w-44"
+        className="mb-6 w-[min(100%,16vw)] min-w-36 tablet:mb-8 tablet:min-w-44"
         role="group"
         aria-label="DAIEGO"
       >
-        <DaiegoLogo
-          width={720}
-          height={216}
+        <DaiegoLogoMark
           priority
-          className="h-auto w-full"
+          className="w-full rounded-2xl p-3 tablet:p-4"
+          markClassName="w-full"
         />
       </div>
 

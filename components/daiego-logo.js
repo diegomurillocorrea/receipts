@@ -17,16 +17,17 @@ export function DaiegoLogo({
 
   return (
     <span className={`relative inline-flex shrink-0 ${className}`}>
+      {/* Keep light logo in flow (invisible in dark) so the box retains size */}
       <img
         {...sharedProps}
         src={LOGO_LIGHT_SRC}
-        className="h-full w-full object-contain dark:hidden"
+        className="h-full w-full object-contain dark:invisible"
       />
       <img
         {...sharedProps}
         src={LOGO_DARK_SRC}
         alt=""
-        className="hidden h-full w-full object-contain dark:block"
+        className="absolute inset-0 hidden h-full w-full object-contain dark:block"
         aria-hidden
       />
     </span>

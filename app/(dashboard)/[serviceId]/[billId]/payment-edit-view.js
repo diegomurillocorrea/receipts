@@ -5,6 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, FileX, Pencil, Upload } from "lucide-react";
 import { DaiegoLogo } from "@/components/daiego-logo";
+import { ServiceLogoLink } from "@/components/service-logo-link";
+import {
+  dateInputToIsoWithCurrentTimeEsSv,
+  toDateInputValueEsSv,
+} from "@/lib/datetime";
 import {
   updatePaymentAction,
   uploadPaymentProofAction,
@@ -28,13 +33,6 @@ const ALLOWED_PROOF_TYPES = [
   "image/webp",
 ];
 const MAX_PROOF_BYTES = 5 * 1024 * 1024;
-
-function formatCreatedAtForInput(isoString) {
-  if (!isoString) return "";
-  const d = new Date(isoString);
-  if (Number.isNaN(d.getTime())) return "";
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 function getServiceImageUrl(service) {
   if (!service?.image_bucket || !service?.image_path) return null;
@@ -111,7 +109,7 @@ export function PaymentEditView({
     () => payment?.payment_method_id ?? ""
   );
   const [createdAt, setCreatedAt] = useState(() =>
-    formatCreatedAtForInput(payment?.created_at)
+    toDateInputValueEsSv(payment?.created_at)
   );
   const [status, setStatus] = useState(() =>
     normalizePaymentStatus(payment?.status)
@@ -127,6 +125,8 @@ export function PaymentEditView({
   const [proofPreviewLoading, setProofPreviewLoading] = useState(false);
 
   const serviceName = service?.name?.trim() || "Servicio";
+  const serviceLink =
+    typeof service?.link === "string" ? service.link.trim() : "";
   const serviceId = service?.id ?? null;
   const serviceImageUrl = getServiceImageUrl(service);
   const clientLabel = getClientDisplayName(receipt?.clients);
@@ -272,19 +272,7 @@ export function PaymentEditView({
     setIsSubmitting(true);
     setFormError(null);
 
-    const createdAtIso = (() => {
-      if (!createdAt) return null;
-      const now = new Date();
-      const [year, month, day] = createdAt.split("-").map(Number);
-      return new Date(
-        year,
-        month - 1,
-        day,
-        now.getHours(),
-        now.getMinutes(),
-        now.getSeconds()
-      ).toISOString();
-    })();
+    const createdAtIso = dateInputToIsoWithCurrentTimeEsSv(createdAt);
 
     const updateResult = await updatePaymentAction(payment.id, {
       receipt_id: receipt.id,
@@ -364,10 +352,7 @@ export function PaymentEditView({
               className="h-full w-full object-contain"
             />
           </div>
-          <div
-            className="flex h-[7.5rem] w-[7.5rem] shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900 tablet:h-36 tablet:w-36"
-            title={serviceName}
-          >
+          <ServiceLogoLink href={serviceLink} serviceName={serviceName}>
             {serviceImageUrl ? (
               <img
                 src={serviceImageUrl}
@@ -377,11 +362,11 @@ export function PaymentEditView({
             ) : (
               <ServicePlaceholder className="h-full w-full" />
             )}
-          </div>
+          </ServiceLogoLink>
         </div>
 
         <div className="mb-6 flex max-w-md items-center justify-center gap-2">
-          <p className="text-center text-base font-semibold text-zinc-900 dark:text-zinc-50">
+          <p className="min-w-0 text-center text-xl font-semibold tracking-tight text-zinc-900 whitespace-nowrap dark:text-zinc-50 sm:text-2xl">
             {contextLabel}
           </p>
           {changeClientHref ? (

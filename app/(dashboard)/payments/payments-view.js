@@ -1,48 +1,27 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Copy, LoaderCircle, MessageCircleMore, Pencil, Trash2 } from "lucide-react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
+import {
+  endOfDayEsSv,
+  formatDateTimeEsSv,
+  getElSalvadorParts,
+  parseDateInputEsSv,
+  startOfDayEsSv,
+  toDateInputValueEsSv,
+} from "@/lib/datetime";
+import { formatAmount } from "@/lib/money";
 import { deletePaymentAction } from "./actions";
 import {
   PAYMENT_STATUS_REGISTERED,
   PAYMENT_STATUS_PAID,
-  PAYMENT_STATUS_CANCELLED,
   PAYMENT_STATUS_SENT,
   normalizePaymentStatus,
   getPaymentStatusLabel,
 } from "./constants";
 import { usePermissions } from "../permissions-provider";
-
-function formatAmount(value) {
-  if (value == null || value === "") return "—";
-  const n = Number(value);
-  if (Number.isNaN(n)) return "—";
-  return new Intl.NumberFormat("es-SV", {
-    style: "currency",
-    currency: "USD",
-  }).format(n);
-}
-
-/** Format: dd/mm/aa - h:mm a.m.|p.m. (12h) */
-function formatPaymentDateHour(isoString) {
-  if (!isoString) return "—";
-  const d = new Date(isoString);
-  if (Number.isNaN(d.getTime())) return "—";
-
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const aa = String(d.getFullYear()).slice(-2);
-
-  const hours24 = d.getHours();
-  const minutes = String(d.getMinutes()).padStart(2, "0");
-  const isPm = hours24 >= 12;
-  const hours12 = hours24 % 12 || 12;
-  const meridiem = isPm ? "p.m." : "a.m.";
-
-  return `${dd}/${mm}/${aa} - ${hours12}:${minutes} ${meridiem}`;
-}
 
 function normalizeReceiptRef(receipt) {
   if (!receipt) return null;
@@ -115,7 +94,7 @@ function paymentMatchesSearch(payment, query) {
     getPaymentStatusLabel(payment?.status),
     formatAmount(payment.total_amount),
     formatAmount(payment.commission),
-    formatPaymentDateHour(payment.created_at),
+    formatDateTimeEsSv(payment.created_at),
   ]
     .join(" ")
     .toLowerCase();
@@ -128,10 +107,9 @@ function hasStoredProof(payment) {
 }
 
 function canSendWhatsAppConfirmation(payment) {
-  return (
-    hasStoredProof(payment) &&
-    normalizePaymentStatus(payment?.status) === PAYMENT_STATUS_CANCELLED
-  );
+  if (!hasStoredProof(payment)) return false;
+  const status = normalizePaymentStatus(payment?.status);
+  return status === PAYMENT_STATUS_PAID || status === PAYMENT_STATUS_SENT;
 }
 
 function getPaymentServiceImageUrl(payment) {
@@ -171,18 +149,12 @@ function getStatusBadgeClass(status) {
   switch (normalizePaymentStatus(status)) {
     case PAYMENT_STATUS_PAID:
       return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300";
-    case PAYMENT_STATUS_CANCELLED:
-      return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300";
     case PAYMENT_STATUS_SENT:
       return "bg-pink-100 text-pink-800 dark:bg-pink-900/40 dark:text-pink-300";
     case PAYMENT_STATUS_REGISTERED:
     default:
       return "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300";
   }
-}
-
-function isPaidStatus(status) {
-  return normalizePaymentStatus(status) === PAYMENT_STATUS_PAID;
 }
 
 const PERIOD_OPTIONS = [
@@ -196,79 +168,87 @@ const PERIOD_OPTIONS = [
 const filterControlClass =
   "w-full min-w-40 rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm text-zinc-900 transition-all duration-200 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:border-emerald-400 dark:focus:ring-emerald-500/30";
 
-function startOfLocalDay(date) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
+/** Query format: DDMMYYYY (e.g. 01082026 → 1 Aug 2026), El Salvador calendar day */
+function formatDateQueryParam(date) {
+  const { year, month, day } = getElSalvadorParts(date);
+  const dd = String(day).padStart(2, "0");
+  const mm = String(month).padStart(2, "0");
+  const yyyy = String(year);
+  return `${dd}${mm}${yyyy}`;
 }
 
-function endOfLocalDay(date) {
-  const d = new Date(date);
-  d.setHours(23, 59, 59, 999);
-  return d;
+function parseDateQueryParam(value) {
+  if (!value || !/^\d{8}$/.test(value)) return null;
+  const day = Number(value.slice(0, 2));
+  const month = Number(value.slice(2, 4));
+  const year = Number(value.slice(4, 8));
+  if (!day || !month || !year) return null;
+  return parseDateInputEsSv(
+    `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+  );
 }
 
-function toDateInputValue(date) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function parseLocalDateInput(value) {
-  if (!value) return null;
-  const [year, month, day] = value.split("-").map(Number);
-  if (!year || !month || !day) return null;
-  const date = new Date(year, month - 1, day);
-  if (Number.isNaN(date.getTime())) return null;
-  return date;
+function resolveSelectedDateValue(dateParam) {
+  const fromUrl = parseDateQueryParam(dateParam);
+  return toDateInputValueEsSv(fromUrl ?? new Date());
 }
 
 function getPeriodRange(period, selectedDateValue, customFrom, customTo) {
   if (period === "personalizado") {
-    const fromDate = parseLocalDateInput(customFrom);
-    const toDate = parseLocalDateInput(customTo);
+    const fromDate = parseDateInputEsSv(customFrom);
+    const toDate = parseDateInputEsSv(customTo);
     if (!fromDate || !toDate) return null;
 
     return {
-      from: startOfLocalDay(fromDate),
-      to: endOfLocalDay(toDate),
+      from: startOfDayEsSv(fromDate),
+      to: endOfDayEsSv(toDate),
     };
   }
 
-  const selectedDate = parseLocalDateInput(selectedDateValue) ?? new Date();
+  const selectedDate = parseDateInputEsSv(selectedDateValue) ?? new Date();
+  const selectedParts = getElSalvadorParts(selectedDate);
 
   if (period === "diario") {
     return {
-      from: startOfLocalDay(selectedDate),
-      to: endOfLocalDay(selectedDate),
+      from: startOfDayEsSv(selectedDate),
+      to: endOfDayEsSv(selectedDate),
     };
   }
 
   if (period === "semanal") {
-    const day = selectedDate.getDay();
-    const mondayOffset = day === 0 ? -6 : 1 - day;
-    const monday = new Date(selectedDate);
-    monday.setDate(selectedDate.getDate() + mondayOffset);
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    return { from: startOfLocalDay(monday), to: endOfLocalDay(sunday) };
+    const weekday = new Date(
+      Date.UTC(selectedParts.year, selectedParts.month - 1, selectedParts.day)
+    ).getUTCDay();
+    const mondayOffset = weekday === 0 ? -6 : 1 - weekday;
+    const mondayDay = selectedParts.day + mondayOffset;
+    const mondayUtc = new Date(
+      Date.UTC(selectedParts.year, selectedParts.month - 1, mondayDay, 12)
+    );
+    const sundayUtc = new Date(
+      Date.UTC(selectedParts.year, selectedParts.month - 1, mondayDay + 6, 12)
+    );
+    return { from: startOfDayEsSv(mondayUtc), to: endOfDayEsSv(sundayUtc) };
   }
 
   if (period === "mensual") {
-    const start = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
-    const end = new Date(
-      selectedDate.getFullYear(),
-      selectedDate.getMonth() + 1,
-      0
+    const start = parseDateInputEsSv(
+      `${selectedParts.year}-${String(selectedParts.month).padStart(2, "0")}-01`
     );
-    return { from: startOfLocalDay(start), to: endOfLocalDay(end) };
+    const lastDay = new Date(
+      Date.UTC(selectedParts.year, selectedParts.month, 0)
+    ).getUTCDate();
+    const end = parseDateInputEsSv(
+      `${selectedParts.year}-${String(selectedParts.month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`
+    );
+    if (!start || !end) return null;
+    return { from: startOfDayEsSv(start), to: endOfDayEsSv(end) };
   }
 
   if (period === "anual") {
-    const start = new Date(selectedDate.getFullYear(), 0, 1);
-    const end = new Date(selectedDate.getFullYear(), 11, 31);
-    return { from: startOfLocalDay(start), to: endOfLocalDay(end) };
+    const start = parseDateInputEsSv(`${selectedParts.year}-01-01`);
+    const end = parseDateInputEsSv(`${selectedParts.year}-12-31`);
+    if (!start || !end) return null;
+    return { from: startOfDayEsSv(start), to: endOfDayEsSv(end) };
   }
 
   return null;
@@ -487,8 +467,11 @@ function ServicioCell({ payment, onCopied, onCopyError }) {
 
 export function PaymentsView({ initialPayments, initialPaymentMethods, fetchError }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === "mobile";
+  const dateParam = searchParams.get("date");
 
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -500,12 +483,14 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
   );
   const [period, setPeriod] = useState("diario");
   const [selectedDate, setSelectedDate] = useState(() =>
-    toDateInputValue(new Date())
+    resolveSelectedDateValue(dateParam)
   );
   const [customFrom, setCustomFrom] = useState(() =>
-    toDateInputValue(new Date())
+    resolveSelectedDateValue(dateParam)
   );
-  const [customTo, setCustomTo] = useState(() => toDateInputValue(new Date()));
+  const [customTo, setCustomTo] = useState(() =>
+    resolveSelectedDateValue(dateParam)
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const sendingWhatsAppPaymentIdsRef = useRef(new Set());
 
@@ -544,6 +529,29 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
   const periodLabel =
     PERIOD_OPTIONS.find((option) => option.value === period)?.label ?? "Período";
 
+  const updateDateInUrl = useCallback(
+    (yyyyMmDd) => {
+      const date = parseDateInputEsSv(yyyyMmDd);
+      if (!date) return;
+      const nextParam = formatDateQueryParam(date);
+      if (searchParams.get("date") === nextParam) return;
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("date", nextParam);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    },
+    [pathname, router, searchParams]
+  );
+
+  useEffect(() => {
+    const next = resolveSelectedDateValue(dateParam);
+    setSelectedDate((current) => (current === next ? current : next));
+  }, [dateParam]);
+
+  useEffect(() => {
+    if (parseDateQueryParam(dateParam)) return;
+    updateDateInUrl(selectedDate);
+  }, [dateParam, selectedDate, updateDateInUrl]);
+
   const handlePeriodChange = useCallback(
     (event) => {
       const nextPeriod = event.target.value;
@@ -556,9 +564,14 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
     [selectedDate]
   );
 
-  const handleSelectedDateChange = useCallback((event) => {
-    setSelectedDate(event.target.value);
-  }, []);
+  const handleSelectedDateChange = useCallback(
+    (event) => {
+      const value = event.target.value;
+      setSelectedDate(value);
+      updateDateInUrl(value);
+    },
+    [updateDateInUrl]
+  );
 
   const handleCustomFromChange = useCallback((event) => {
     setCustomFrom(event.target.value);
@@ -917,13 +930,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                   onCopyError={handleCopyError}
                 />
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-                  <span
-                    className={`font-medium ${
-                      isPaidStatus(payment.status)
-                        ? "text-emerald-700 dark:text-emerald-400"
-                        : "text-zinc-900 dark:text-zinc-50"
-                    }`}
-                  >
+                  <span className="font-medium text-zinc-900 dark:text-zinc-50">
                     Monto: {formatAmount(payment.total_amount)}
                   </span>
                   <span className="text-zinc-600 dark:text-zinc-400">
@@ -931,7 +938,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                   </span>
                   <StatusBadge status={payment.status} />
                   <span className="text-zinc-500 dark:text-zinc-400">
-                    {formatPaymentDateHour(payment.created_at)}
+                    {formatDateTimeEsSv(payment.created_at)}
                   </span>
                 </div>
                 <PaymentActions
@@ -997,13 +1004,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                         onCopyError={handleCopyError}
                       />
                     </td>
-                    <td
-                      className={`whitespace-nowrap px-4 py-3.5 font-medium tablet:px-6 ${
-                        isPaidStatus(payment.status)
-                          ? "text-emerald-700 dark:text-emerald-400"
-                          : "text-zinc-900 dark:text-zinc-50"
-                      }`}
-                    >
+                    <td className="whitespace-nowrap px-4 py-3.5 font-medium text-zinc-900 dark:text-zinc-50 tablet:px-6">
                       {formatAmount(payment.total_amount)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3.5 text-zinc-600 dark:text-zinc-400 tablet:px-6">
@@ -1013,7 +1014,7 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                       <StatusBadge status={payment.status} />
                     </td>
                     <td className="whitespace-nowrap px-4 py-3.5 text-zinc-600 dark:text-zinc-400 tablet:px-6">
-                      {formatPaymentDateHour(payment.created_at)}
+                      {formatDateTimeEsSv(payment.created_at)}
                     </td>
                     <td className="px-4 py-3.5 tablet:px-6">
                       <PaymentActions

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
+import { formatDateEsSv } from "@/lib/datetime";
 import { usePermissions } from "../permissions-provider";
 import {
   createUserAction,
@@ -17,16 +18,6 @@ const EMPTY_FORM = {
   password: "",
   role_id: "",
 };
-
-function formatDate(isoString) {
-  if (!isoString) return "—";
-  const d = new Date(isoString);
-  return d.toLocaleDateString("es-SV", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
 
 export function UsersView({ initialUsers, fetchError }) {
   const router = useRouter();
@@ -293,7 +284,7 @@ export function UsersView({ initialUsers, fetchError }) {
                     Rol: {user.role_name || "Sin rol"}
                   </span>
                   <span className="text-xs text-zinc-500 dark:text-zinc-500">
-                    {formatDate(user.created_at)}
+                    {formatDateEsSv(user.created_at)}
                   </span>
                 </div>
                 {(canEdit || canDelete) && (
@@ -369,7 +360,7 @@ export function UsersView({ initialUsers, fetchError }) {
                       {user.role_name || "Sin rol"}
                     </td>
                     <td className="px-4 py-3.5 text-zinc-500 dark:text-zinc-500 tablet:px-6">
-                      {formatDate(user.created_at)}
+                      {formatDateEsSv(user.created_at)}
                     </td>
                     {(canEdit || canDelete) && (
                     <td className="px-4 py-3.5 tablet:px-6">

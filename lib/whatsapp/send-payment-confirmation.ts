@@ -8,6 +8,7 @@ export type PaymentConfirmationTemplateData = {
   serviceNumber: string;
   formattedAmount: string;
   formattedCommission: string;
+  formattedTotal: string;
 };
 
 type MetaMessage = {
@@ -101,9 +102,8 @@ async function parseMetaResponse(response: Response): Promise<MetaResponse> {
 }
 
 /**
- * Converts an explicitly international number to WhatsApp's digits-only format.
- * A local number without an explicit + or 00 international prefix is rejected so
- * the server never guesses a country code.
+ * Converts a stored/international number to WhatsApp's digits-only format.
+ * Accepts +E.164, 00-prefix, or El Salvador digits already stored as 503XXXXXXXX.
  */
 export function normalizeWhatsAppPhoneNumber(value: string | null | undefined): string | null {
   const input = value?.trim() ?? "";
@@ -111,11 +111,21 @@ export function normalizeWhatsAppPhoneNumber(value: string | null | undefined): 
 
   if (!/^(?:\+|00)?[0-9()\s.-]+$/.test(input)) return null;
 
-  const isInternational = input.startsWith("+") || input.startsWith("00");
-  if (!isInternational) return null;
-
   const digits = input.replace(/\D/g, "");
-  const normalized = input.startsWith("00") ? digits.slice(2) : digits;
+  if (!digits) return null;
+
+  let normalized = digits;
+  if (input.startsWith("00")) {
+    normalized = digits.slice(2);
+  } else if (input.startsWith("+")) {
+    normalized = digits;
+  } else if (/^503\d{8}$/.test(digits)) {
+    // Stored app format: 503XXXXXXXX (no leading +).
+    normalized = digits;
+  } else {
+    // Local numbers without country code are rejected so we never guess.
+    return null;
+  }
 
   // E.164 allows up to 15 digits and a country calling code cannot begin with 0.
   if (!/^[1-9]\d{6,14}$/.test(normalized)) return null;
@@ -165,6 +175,7 @@ export async function sendPaymentConfirmationTemplate(
                   { type: "text", text: templateData.serviceNumber },
                   { type: "text", text: templateData.formattedAmount },
                   { type: "text", text: templateData.formattedCommission },
+                  { type: "text", text: templateData.formattedTotal },
                 ],
               },
             ],

@@ -22,7 +22,7 @@ async function ServiceSearchPageContent({ serviceId }) {
   const supabase = await createClient();
   const { data: service, error } = await supabase
     .from("services")
-    .select("id, name, image_bucket, image_path")
+    .select("id, name, link, image_bucket, image_path")
     .eq("id", serviceId)
     .maybeSingle();
 

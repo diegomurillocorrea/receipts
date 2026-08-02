@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useCallback, useMemo } from "react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
+import { formatDateEsSv } from "@/lib/datetime";
 import { usePermissions } from "../permissions-provider";
 import {
   createPaymentMethodAction,
@@ -13,16 +14,6 @@ import {
 const EMPTY_FORM = {
   name: "",
 };
-
-function formatDate(isoString) {
-  if (!isoString) return "—";
-  const d = new Date(isoString);
-  return d.toLocaleDateString("es-SV", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
 
 export function PaymentMethodsView({ initialPaymentMethods, fetchError }) {
   const router = useRouter();
@@ -269,7 +260,7 @@ export function PaymentMethodsView({ initialPaymentMethods, fetchError }) {
                     {method.name}
                   </span>
                   <span className="text-xs text-zinc-500 dark:text-zinc-500">
-                    {formatDate(method.created_at)}
+                    {formatDateEsSv(method.created_at)}
                   </span>
                 </div>
                 {(canEdit || canDelete) && (
@@ -333,7 +324,7 @@ export function PaymentMethodsView({ initialPaymentMethods, fetchError }) {
                       {method.name}
                     </td>
                     <td className="px-4 py-3.5 text-zinc-500 dark:text-zinc-500 tablet:px-6">
-                      {formatDate(method.created_at)}
+                      {formatDateEsSv(method.created_at)}
                     </td>
                     {(canEdit || canDelete) && (
                     <td className="px-4 py-3.5 tablet:px-6">

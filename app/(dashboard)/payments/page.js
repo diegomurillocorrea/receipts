@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { requirePageView } from "@/lib/auth/page-access";
 import { PaymentsView } from "./payments-view";
@@ -5,6 +6,15 @@ import { PaymentsView } from "./payments-view";
 export const metadata = {
   title: "Pagos",
 };
+
+function PaymentsViewFallback() {
+  return (
+    <div className="space-y-6 tablet:space-y-8" aria-busy="true" aria-label="Cargando pagos">
+      <div className="h-10 w-40 animate-pulse rounded-xl bg-zinc-200 dark:bg-zinc-800" />
+      <div className="h-64 animate-pulse rounded-2xl bg-zinc-200 dark:bg-zinc-800" />
+    </div>
+  );
+}
 
 export default async function PaymentsPage() {
   await requirePageView("payments");
@@ -23,10 +33,12 @@ export default async function PaymentsPage() {
   ]);
 
   return (
-    <PaymentsView
-      initialPayments={paymentsResult.error ? [] : paymentsResult.data ?? []}
-      initialPaymentMethods={paymentMethodsResult.error ? [] : paymentMethodsResult.data ?? []}
-      fetchError={paymentsResult.error?.message ?? null}
-    />
+    <Suspense fallback={<PaymentsViewFallback />}>
+      <PaymentsView
+        initialPayments={paymentsResult.error ? [] : paymentsResult.data ?? []}
+        initialPaymentMethods={paymentMethodsResult.error ? [] : paymentMethodsResult.data ?? []}
+        fetchError={paymentsResult.error?.message ?? null}
+      />
+    </Suspense>
   );
 }

@@ -9,6 +9,7 @@ import {
   getActionsForResource,
   permissionKey,
 } from "@/lib/auth/permission-catalog";
+import { formatDateEsSv } from "@/lib/datetime";
 import {
   createRoleAction,
   updateRoleAction,
@@ -19,16 +20,6 @@ const EMPTY_FORM = {
   name: "",
   description: "",
 };
-
-function formatDate(isoString) {
-  if (!isoString) return "—";
-  const d = new Date(isoString);
-  return d.toLocaleDateString("es-SV", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
 
 /**
  * @param {{ resource: string; action: string }[]} permissions
@@ -386,7 +377,7 @@ export function RolesView({ initialRoles, fetchError }) {
                     </span>
                   )}
                   <span className="text-xs text-zinc-500">
-                    {(role.permissions ?? []).length} permiso(s) · {formatDate(role.created_at)}
+                    {(role.permissions ?? []).length} permiso(s) · {formatDateEsSv(role.created_at)}
                   </span>
                 </div>
                 <div className="flex gap-3 pt-2">
@@ -463,7 +454,7 @@ export function RolesView({ initialRoles, fetchError }) {
                       {(role.permissions ?? []).length}
                     </td>
                     <td className="px-4 py-3.5 text-zinc-500 tablet:px-6">
-                      {formatDate(role.created_at)}
+                      {formatDateEsSv(role.created_at)}
                     </td>
                     <td className="px-4 py-3.5 tablet:px-6">
                       <div className="flex gap-3">

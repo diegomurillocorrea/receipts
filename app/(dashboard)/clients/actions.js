@@ -24,7 +24,7 @@ const EL_SALVADOR_COUNTRY_CODE = "503";
  */
 
 /**
- * Normalize client phones to El Salvador E.164 (+503XXXXXXXX).
+ * Normalize client phones to El Salvador digits: 503XXXXXXXX (no leading +).
  * Accepts local 8-digit numbers or values that already include 503 / +503.
  * @param {string | null | undefined} value
  * @returns {{ phone: string | null; error: string | null }}
@@ -48,7 +48,7 @@ function normalizeElSalvadorPhoneNumber(value) {
     };
   }
 
-  return { phone: `+${EL_SALVADOR_COUNTRY_CODE}${localDigits}`, error: null };
+  return { phone: `${EL_SALVADOR_COUNTRY_CODE}${localDigits}`, error: null };
 }
 
 /**

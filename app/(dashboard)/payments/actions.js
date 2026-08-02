@@ -6,7 +6,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import {
   PAYMENT_PROOF_BUCKET,
   normalizePaymentStatus,
-  PAYMENT_STATUS_CANCELLED,
+  PAYMENT_STATUS_PAID,
   PAYMENT_STATUS_REGISTERED,
 } from "./constants";
 
@@ -147,7 +147,7 @@ export async function createPaymentAction(payload) {
   const receipt_id = payload.receipt_id?.trim();
   const total_amount = Number(payload.total_amount);
   const payment_method_id = payload.payment_method_id?.trim();
-  // Registrado on create. Cancelado is set when a voucher/proof is uploaded.
+  // Registrado on create. Pagado is set when a voucher/proof is uploaded.
   const status = PAYMENT_STATUS_REGISTERED;
   const created_at = payload.created_at?.trim() || null;
   const add_commission = payload.add_commission !== false;
@@ -383,7 +383,7 @@ export async function uploadPaymentProofAction(paymentId, formData) {
     .update({
       proof_bucket: PAYMENT_PROOF_BUCKET,
       proof_path: path,
-      status: PAYMENT_STATUS_CANCELLED,
+      status: PAYMENT_STATUS_PAID,
     })
     .eq("id", paymentId);
 

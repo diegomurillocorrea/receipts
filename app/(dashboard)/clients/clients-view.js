@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useBreakpoint } from "@/hooks/use-breakpoint";
 import { usePermissions } from "../permissions-provider";
+import { formatDateEsSv } from "@/lib/datetime";
+import { formatElSalvadorPhoneDisplay } from "@/lib/phone";
 import {
   createClientAction,
   updateClientAction,
@@ -22,7 +24,7 @@ const EMPTY_FORM = {
   reference: "",
 };
 
-const EL_SALVADOR_PHONE_PREFIX = "+503";
+const EL_SALVADOR_PHONE_PREFIX = "503";
 
 /**
  * Show only the local 8 digits in the form (country code is fixed in the UI).
@@ -36,16 +38,6 @@ function toLocalPhoneInput(phone) {
     return digits.slice(3);
   }
   return digits.slice(-8);
-}
-
-function formatDate(isoString) {
-  if (!isoString) return "—";
-  const d = new Date(isoString);
-  return d.toLocaleDateString("es-SV", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
 }
 
 function getServiceImageUrl(service) {
@@ -549,7 +541,7 @@ export function ClientsView({ initialClients, fetchError }) {
                     {client.name} {client.last_name}
                   </span>
                   <span className="text-sm text-zinc-600 dark:text-zinc-400">
-                    {client.phone_number || "—"}
+                    {formatElSalvadorPhoneDisplay(client.phone_number) || "—"}
                   </span>
                   {client.reference && (
                     <span className="text-xs text-zinc-500 dark:text-zinc-500">
@@ -557,7 +549,7 @@ export function ClientsView({ initialClients, fetchError }) {
                     </span>
                   )}
                   <span className="text-xs text-zinc-500 dark:text-zinc-500">
-                    {formatDate(client.created_at)}
+                    {formatDateEsSv(client.created_at)}
                   </span>
                 </div>
                 {(canEdit || canDelete) && (
@@ -633,13 +625,13 @@ export function ClientsView({ initialClients, fetchError }) {
                       {client.last_name}
                     </td>
                     <td className="px-4 py-3.5 text-zinc-600 dark:text-zinc-400 tablet:px-6">
-                      {client.phone_number || "—"}
+                      {formatElSalvadorPhoneDisplay(client.phone_number) || "—"}
                     </td>
                     <td className="px-4 py-3.5 text-zinc-600 dark:text-zinc-400 tablet:px-6">
                       {client.reference || "—"}
                     </td>
                     <td className="px-4 py-3.5 text-zinc-500 dark:text-zinc-500 tablet:px-6">
-                      {formatDate(client.created_at)}
+                      {formatDateEsSv(client.created_at)}
                     </td>
                     {(canEdit || canDelete) && (
                     <td className="px-4 py-3.5 tablet:px-6">
@@ -1211,7 +1203,7 @@ export function ClientsView({ initialClients, fetchError }) {
                 >
                   Ya existe un contacto registrado con el número{" "}
                   <strong className="text-zinc-900 dark:text-zinc-50">
-                    {duplicateClient.phone_number}
+                    {formatElSalvadorPhoneDisplay(duplicateClient.phone_number)}
                   </strong>
                   .
                 </p>
@@ -1226,7 +1218,7 @@ export function ClientsView({ initialClients, fetchError }) {
                 {duplicateClient.name} {duplicateClient.last_name}
               </p>
               <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                {duplicateClient.phone_number || "—"}
+                {formatElSalvadorPhoneDisplay(duplicateClient.phone_number) || "—"}
               </p>
               {duplicateClient.reference && (
                 <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-500">

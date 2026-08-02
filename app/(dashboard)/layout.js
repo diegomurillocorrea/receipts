@@ -9,6 +9,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { Footer } from "@/components/footer";
 import { DaiegoLogo } from "@/components/daiego-logo";
 import { PermissionsProvider, usePermissions } from "./permissions-provider";
+import { HomePixelBlastBackground } from "@/components/home-pixel-blast-background";
 
 function useUser() {
   const [user, setUser] = useState(null);
@@ -326,16 +327,18 @@ export default function DashboardLayout({ children }) {
   const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
 
   if (isHome) {
+    const isHomeRoot = pathname === "/";
     return (
       <PermissionsProvider>
         <div className="fixed inset-0 flex flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950">
-          <div className="absolute left-4 top-4 z-10">
+          {isHomeRoot ? <HomePixelBlastBackground /> : null}
+          <div className="absolute left-6 top-6 z-20">
             <MobileThemeToggle />
           </div>
-          <div className="absolute right-4 top-4 z-10">
+          <div className="absolute right-6 top-6 z-20">
             <HomeUserMenu />
           </div>
-          <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          <main className="relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto">
             <div className="flex w-full flex-1 flex-col px-4 py-4 tablet:px-6 desktop:px-8">
               {children}
             </div>
