@@ -1,7 +1,6 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, Copy } from "lucide-react";
 import { DaiegoLogo } from "@/components/daiego-logo";
@@ -12,6 +11,7 @@ import {
   uploadPaymentProofAction,
 } from "../../payments/actions";
 import { usePermissions } from "../../permissions-provider";
+import { useIsMobile } from "@/hooks/use-breakpoint";
 
 const inputClassName =
   "w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-zinc-900 placeholder-zinc-400 transition-all duration-200 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-100 dark:placeholder-zinc-500 dark:focus:border-emerald-400 dark:focus:ring-emerald-500/30";
@@ -129,10 +129,10 @@ export function PaymentRegisterView({
   receipt,
   service,
   paymentMethods,
-  backHref,
 }) {
   const router = useRouter();
   const { can, isLoading: isPermissionsLoading } = usePermissions();
+  const isMobile = useIsMobile();
   const amountId = useId();
   const commissionId = useId();
   const methodId = useId();
@@ -269,28 +269,6 @@ export function PaymentRegisterView({
 
   return (
     <div className="relative flex w-full flex-1 flex-col px-1">
-      <Link
-        href={backHref || `/${service.id}`}
-        className="fixed left-16 top-4 z-20 inline-flex min-h-11 items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50 dark:focus:ring-offset-zinc-950"
-        aria-label={`Volver a búsqueda de ${serviceName}`}
-      >
-        <svg
-          className="h-5 w-5 shrink-0"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M15 19l-7-7 7-7"
-          />
-        </svg>
-        Volver
-      </Link>
-
       <div className="flex flex-1 flex-col items-center justify-center py-16">
         <div
           className="mb-6 flex items-center justify-center gap-3 tablet:mb-8 tablet:gap-4"
@@ -319,15 +297,29 @@ export function PaymentRegisterView({
         </div>
 
         <div className="mb-6 w-full text-center">
-          <h2 className="inline-flex items-center gap-x-1.5 whitespace-nowrap text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-2xl">
-            <span>{clientLabel}</span>
-            {accountNumber ? (
-              <>
-                <span aria-hidden>-</span>
-                <span>{accountNumber}</span>
-                <CopyServiceNumberButton value={accountNumber} />
-              </>
-            ) : null}
+          <h2 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-2xl">
+            {isMobile ? (
+              <span className="flex flex-col items-center">
+                <span>{clientLabel}</span>
+                {accountNumber ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span>{accountNumber}</span>
+                    <CopyServiceNumberButton value={accountNumber} />
+                  </span>
+                ) : null}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-x-1.5 whitespace-nowrap">
+                <span>{clientLabel}</span>
+                {accountNumber ? (
+                  <>
+                    <span aria-hidden>-</span>
+                    <span>{accountNumber}</span>
+                    <CopyServiceNumberButton value={accountNumber} />
+                  </>
+                ) : null}
+              </span>
+            )}
           </h2>
         </div>
 

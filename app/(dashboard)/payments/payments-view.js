@@ -414,7 +414,7 @@ function ServicioCell({ payment, onCopied, onCopyError }) {
         size="h-10 w-10"
         rounded="rounded-full"
       />
-      <div className="min-w-0 flex-1 space-y-1">
+      <div className="min-w-0 flex-1 space-y-1.5 leading-relaxed">
         {serviceName ? (
           <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-50">
             {serviceName}
@@ -920,29 +920,33 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
             {filteredPayments.map((payment) => (
               <li
                 key={payment.id}
-                className="space-y-3 px-4 py-4 transition-colors hover:bg-emerald-50/40 dark:hover:bg-emerald-950/10"
+                className="space-y-4 px-5 py-5 transition-colors hover:bg-emerald-50/40 dark:hover:bg-emerald-950/10"
               >
                 <ServicioCell
                   payment={payment}
                   onCopied={handleCopied}
                   onCopyError={handleCopyError}
                 />
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-                  <span className="font-medium text-zinc-900 dark:text-zinc-50">
-                    Monto: {formatAmount(payment.total_amount)}
-                  </span>
-                  <span className="text-zinc-600 dark:text-zinc-400">
-                    Comisión: {formatAmount(payment.commission)}
-                  </span>
-                  <StatusBadge status={payment.status} />
+                <div className="flex flex-col gap-3 text-sm leading-relaxed">
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
+                    <span className="font-medium text-zinc-900 dark:text-zinc-50">
+                      Monto: {formatAmount(payment.total_amount)}
+                    </span>
+                    <span className="text-zinc-600 dark:text-zinc-400">
+                      Comisión: {formatAmount(payment.commission)}
+                    </span>
+                    <StatusBadge status={payment.status} />
+                  </div>
                   <span className="text-zinc-500 dark:text-zinc-400">
                     {formatDateTimeEsSv(payment.created_at)}
                   </span>
                 </div>
-                <PaymentActions
-                  payment={payment}
-                  {...actionHandlers}
-                />
+                <div className="pt-1">
+                  <PaymentActions
+                    payment={payment}
+                    {...actionHandlers}
+                  />
+                </div>
               </li>
             ))}
           </ul>
@@ -960,37 +964,37 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
               <thead className={tableHeadClass}>
                 <tr className="border-b border-zinc-200/80 dark:border-zinc-800">
                   <th
-                    className={`${tableHeadCellClass} px-4 py-3.5 text-left font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-5`}
+                    className={`${tableHeadCellClass} px-4 py-4 text-left font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-5 tablet:py-4.5`}
                     scope="col"
                   >
                     Servicio
                   </th>
                   <th
-                    className={`${tableHeadCellClass} px-4 py-3.5 text-center font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-5`}
+                    className={`${tableHeadCellClass} px-4 py-4 text-center font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-5 tablet:py-4.5`}
                     scope="col"
                   >
                     Monto
                   </th>
                   <th
-                    className={`${tableHeadCellClass} px-4 py-3.5 text-center font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-5`}
+                    className={`${tableHeadCellClass} px-4 py-4 text-center font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-5 tablet:py-4.5`}
                     scope="col"
                   >
                     Comisión
                   </th>
                   <th
-                    className={`${tableHeadCellClass} px-4 py-3.5 text-center font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-5`}
+                    className={`${tableHeadCellClass} px-4 py-4 text-center font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-5 tablet:py-4.5`}
                     scope="col"
                   >
                     Estado
                   </th>
                   <th
-                    className={`${tableHeadCellClass} px-4 py-3.5 text-center font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-5`}
+                    className={`${tableHeadCellClass} px-4 py-4 text-center font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-5 tablet:py-4.5`}
                     scope="col"
                   >
                     Fecha / Hora
                   </th>
                   <th
-                    className={`${tableHeadCellClass} px-4 py-3.5 text-center font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-5`}
+                    className={`${tableHeadCellClass} px-4 py-4 text-center font-semibold text-zinc-700 dark:text-zinc-300 tablet:px-5 tablet:py-4.5`}
                     scope="col"
                   >
                     Acciones
@@ -1003,26 +1007,26 @@ export function PaymentsView({ initialPayments, initialPaymentMethods, fetchErro
                     key={payment.id}
                     className="border-b border-zinc-100 last:border-0 transition-colors hover:bg-emerald-50/40 dark:border-zinc-800 dark:hover:bg-emerald-950/10"
                   >
-                    <td className="min-w-0 px-4 py-3.5 text-left tablet:px-5">
+                    <td className="min-w-0 px-4 py-4 text-left tablet:px-5 tablet:py-4.5">
                       <ServicioCell
                         payment={payment}
                         onCopied={handleCopied}
                         onCopyError={handleCopyError}
                       />
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3.5 text-center font-medium tabular-nums text-zinc-900 dark:text-zinc-50 tablet:px-5">
+                    <td className="whitespace-nowrap px-4 py-4 text-center font-medium tabular-nums text-zinc-900 dark:text-zinc-50 tablet:px-5 tablet:py-4.5">
                       {formatAmount(payment.total_amount)}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3.5 text-center tabular-nums text-zinc-600 dark:text-zinc-400 tablet:px-5">
+                    <td className="whitespace-nowrap px-4 py-4 text-center tabular-nums text-zinc-600 dark:text-zinc-400 tablet:px-5 tablet:py-4.5">
                       {formatAmount(payment.commission)}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3.5 text-center tablet:px-5">
+                    <td className="whitespace-nowrap px-4 py-4 text-center tablet:px-5 tablet:py-4.5">
                       <StatusBadge status={payment.status} />
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3.5 text-center text-zinc-600 dark:text-zinc-400 tablet:px-5">
+                    <td className="whitespace-nowrap px-4 py-4 text-center text-zinc-600 dark:text-zinc-400 tablet:px-5 tablet:py-4.5">
                       {formatDateTimeEsSv(payment.created_at)}
                     </td>
-                    <td className="whitespace-nowrap px-4 py-3.5 text-center tablet:px-5">
+                    <td className="whitespace-nowrap px-4 py-4 text-center tablet:px-5 tablet:py-4.5">
                       <div className="flex w-full justify-center">
                         <PaymentActions
                           payment={payment}

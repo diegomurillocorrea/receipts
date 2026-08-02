@@ -152,7 +152,6 @@ async function PaymentEditPageContent({ serviceId, billId, paymentId }) {
       receipt={receipt}
       service={joinedService}
       paymentMethods={methodsResult.error ? [] : methodsResult.data ?? []}
-      backHref="/payments"
     />
   );
 }
@@ -219,7 +218,6 @@ async function PaymentRegisterPageContent({ serviceId, billId }) {
       receipt={receipt}
       service={service}
       paymentMethods={methodsResult.error ? [] : methodsResult.data ?? []}
-      backHref={`/${serviceId}`}
     />
   );
 }

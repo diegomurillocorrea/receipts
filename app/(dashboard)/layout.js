@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useId, useRef } from "react";
+import { useState, useCallback, useEffect, useId, useRef, Suspense } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -10,6 +10,7 @@ import { Footer } from "@/components/footer";
 import { DaiegoLogo } from "@/components/daiego-logo";
 import { PermissionsProvider, usePermissions } from "./permissions-provider";
 import { HomePixelBlastBackground } from "@/components/home-pixel-blast-background";
+import { HomeShellBackLink } from "@/components/home-shell-back-link";
 import { usesTableScrollShell } from "@/lib/table-scroll-shell";
 
 function useUser() {
@@ -324,6 +325,7 @@ export default function DashboardLayout({ children }) {
   const isTablet = breakpoint === "tablet";
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isHome = usesHomeShell(pathname);
+  const isHomeServices = pathname === "/";
 
   const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
   const isTableScrollPage = usesTableScrollShell(pathname);
@@ -333,14 +335,21 @@ export default function DashboardLayout({ children }) {
       <PermissionsProvider>
         <div className="fixed inset-0 flex flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950">
           <HomePixelBlastBackground />
-          <div className="absolute left-6 top-6 z-20">
+          <div className="absolute left-6 top-6 z-20 flex items-center gap-2">
             <MobileThemeToggle />
+            <Suspense fallback={null}>
+              <HomeShellBackLink />
+            </Suspense>
           </div>
           <div className="absolute right-6 top-6 z-20">
             <HomeUserMenu />
           </div>
-          <main className="relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto">
-            <div className="flex w-full flex-1 flex-col px-4 py-4 tablet:px-6 desktop:px-8">
+          <main
+            className={`relative z-10 flex min-h-0 flex-1 flex-col ${isHomeServices ? "overflow-hidden" : "overflow-y-auto"}`}
+          >
+            <div
+              className={`flex w-full flex-1 flex-col px-4 py-4 tablet:px-6 desktop:px-8 ${isHomeServices ? "min-h-0 overflow-hidden" : ""}`}
+            >
               {children}
             </div>
             <div className="shrink-0">
