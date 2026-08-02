@@ -93,6 +93,14 @@ function getPaymentServiceName(payment) {
   return (svc?.name ?? "").trim();
 }
 
+function getPaymentServiceLink(payment) {
+  const receipt = normalizeReceiptRef(payment.receipt ?? payment.receipts);
+  if (!receipt) return "";
+  const service = receipt.services ?? receipt.service;
+  const svc = Array.isArray(service) ? service[0] : service;
+  return typeof svc?.link === "string" ? svc.link.trim() : "";
+}
+
 function paymentMatchesSearch(payment, query) {
   const q = query.trim().toLowerCase();
   if (!q) return true;
@@ -138,25 +146,46 @@ function getPaymentServiceImageUrl(payment) {
   return `${base}/storage/v1/object/public/${svc.image_bucket}/${svc.image_path}`;
 }
 
-function ServiceImageThumb({ url, size = "h-9 w-9", rounded = "rounded-lg" }) {
-  if (url) {
-    return (
-      <img
-        src={url}
-        alt=""
-        className={`${size} shrink-0 ${rounded} border border-zinc-200 object-contain bg-white dark:border-zinc-700 dark:bg-zinc-800`}
-      />
-    );
-  }
-  return (
+function ServiceImageThumb({
+  url,
+  size = "h-9 w-9",
+  rounded = "rounded-lg",
+  href,
+  serviceName = "servicio",
+}) {
+  const link = typeof href === "string" ? href.trim() : "";
+
+  const content = url ? (
+    <img
+      src={url}
+      alt={link ? `Logo de ${serviceName}` : ""}
+      className={`${size} shrink-0 ${rounded} border border-zinc-200 object-contain bg-white dark:border-zinc-700 dark:bg-zinc-800`}
+    />
+  ) : (
     <div
       className={`${size} flex shrink-0 items-center justify-center ${rounded} border border-dashed border-zinc-300 text-zinc-400 dark:border-zinc-700 dark:text-zinc-600`}
-      aria-hidden
+      aria-hidden={!link}
     >
       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
       </svg>
     </div>
+  );
+
+  if (!link) return content;
+
+  return (
+    <a
+      href={link}
+      target="_blank"
+      rel="noopener noreferrer"
+      tabIndex={0}
+      className={`inline-flex shrink-0 cursor-pointer transition-opacity hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 dark:focus:ring-offset-zinc-950 ${rounded}`}
+      aria-label={`Abrir sitio de ${serviceName} en una nueva pestaña`}
+      title={`Ir a ${serviceName} (nueva pestaña)`}
+    >
+      {content}
+    </a>
   );
 }
 
@@ -405,6 +434,7 @@ function ServicioCell({ payment, onCopied, onCopyError }) {
   const clientName = getPaymentClientName(payment);
   const accountNumber = getPaymentAccountNumber(payment) || "—";
   const serviceName = getPaymentServiceName(payment);
+  const serviceLink = getPaymentServiceLink(payment);
   const imageUrl = getPaymentServiceImageUrl(payment);
 
   return (
@@ -413,6 +443,8 @@ function ServicioCell({ payment, onCopied, onCopyError }) {
         url={imageUrl}
         size="h-10 w-10"
         rounded="rounded-full"
+        href={serviceLink}
+        serviceName={serviceName || "servicio"}
       />
       <div className="min-w-0 flex-1 space-y-1.5 leading-relaxed">
         {serviceName ? (

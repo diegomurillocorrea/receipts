@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { ActionIconButton } from "@/components/action-icon-button";
 import { TableEditDeleteActions } from "@/components/table-edit-delete-actions";
 import { Pencil, Trash2 } from "lucide-react";
@@ -16,7 +16,10 @@ import {
   tableViewSectionClass,
   tableViewSectionTitleClass,
 } from "@/lib/table-scroll-shell";
-import { formatElSalvadorPhoneDisplay } from "@/lib/phone";
+import {
+  formatElSalvadorPhoneDisplay,
+  formatLocalElSalvadorPhoneInput,
+} from "@/lib/phone";
 import {
   createClientAction,
   updateClientAction,
@@ -26,7 +29,12 @@ import {
   createReceiptAction,
   updateReceiptAction,
   deleteReceiptByIdAction,
+  searchClientsAction,
+  reassignReceiptToClientAction,
 } from "./actions";
+
+const SEARCH_DEBOUNCE_MS = 300;
+const MIN_CLIENT_SEARCH_LENGTH = 2;
 
 const EMPTY_FORM = {
   name: "",
@@ -56,6 +64,11 @@ function getServiceImageUrl(service) {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!base) return null;
   return `${base}/storage/v1/object/public/${service.image_bucket}/${service.image_path}`;
+}
+
+function getClientFullName(client) {
+  if (!client) return "Sin nombre";
+  return [client.name, client.last_name].filter(Boolean).join(" ").trim() || "Sin nombre";
 }
 
 export function ClientsView({ initialClients, fetchError }) {
@@ -94,6 +107,15 @@ export function ClientsView({ initialClients, fetchError }) {
   const [adderServiceId, setAdderServiceId] = useState("");
   const [adderValue, setAdderValue] = useState("");
 
+  const [reassignTarget, setReassignTarget] = useState(null);
+  const [reassignSearchQuery, setReassignSearchQuery] = useState("");
+  const [reassignResults, setReassignResults] = useState([]);
+  const [isReassignSearchLoading, setIsReassignSearchLoading] = useState(false);
+  const [reassignError, setReassignError] = useState(null);
+  const [reassignSelectedClientId, setReassignSelectedClientId] = useState(null);
+  const [isReassigning, setIsReassigning] = useState(false);
+  const reassignSearchTimeoutRef = useRef(null);
+
   const isEditing = formOpen && formOpen !== "create";
 
   const filteredClients = useMemo(() => {
@@ -114,6 +136,61 @@ export function ClientsView({ initialClients, fetchError }) {
       );
     });
   }, [clients, searchQuery]);
+
+  const filteredReassignResults = useMemo(() => {
+    if (!isEditing || !formOpen?.id) return reassignResults;
+    return reassignResults.filter((client) => client.id !== formOpen.id);
+  }, [reassignResults, isEditing, formOpen?.id]);
+
+  const trimmedReassignSearchQuery = reassignSearchQuery.trim();
+
+  const runReassignSearch = useCallback(async (query) => {
+    const q = (query ?? "").trim();
+    if (q.length < MIN_CLIENT_SEARCH_LENGTH) {
+      setReassignResults([]);
+      setReassignError(null);
+      setIsReassignSearchLoading(false);
+      return;
+    }
+
+    setIsReassignSearchLoading(true);
+    setReassignError(null);
+    const result = await searchClientsAction(q);
+    setIsReassignSearchLoading(false);
+
+    if (result.error) {
+      setReassignResults([]);
+      setReassignError(result.error);
+      return;
+    }
+
+    setReassignResults(result.clients ?? []);
+  }, []);
+
+  useEffect(() => {
+    if (!reassignTarget) return;
+    if (reassignSearchTimeoutRef.current) {
+      clearTimeout(reassignSearchTimeoutRef.current);
+    }
+
+    if (trimmedReassignSearchQuery.length < MIN_CLIENT_SEARCH_LENGTH) {
+      setReassignResults([]);
+      setReassignError(null);
+      setIsReassignSearchLoading(false);
+      return;
+    }
+
+    setIsReassignSearchLoading(true);
+    reassignSearchTimeoutRef.current = setTimeout(() => {
+      runReassignSearch(reassignSearchQuery);
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      if (reassignSearchTimeoutRef.current) {
+        clearTimeout(reassignSearchTimeoutRef.current);
+      }
+    };
+  }, [reassignTarget, reassignSearchQuery, trimmedReassignSearchQuery.length, runReassignSearch]);
 
   useEffect(() => {
     if (!formOpen) {
@@ -149,6 +226,16 @@ export function ClientsView({ initialClients, fetchError }) {
       cancelled = true;
     };
   }, [isEditing, formOpen?.id, formOpen]);
+
+  const resetReassign = useCallback(() => {
+    setReassignTarget(null);
+    setReassignSearchQuery("");
+    setReassignResults([]);
+    setIsReassignSearchLoading(false);
+    setReassignError(null);
+    setReassignSelectedClientId(null);
+    setIsReassigning(false);
+  }, []);
 
   const resetAdder = useCallback(() => {
     setAdderOpen(false);
@@ -188,7 +275,8 @@ export function ClientsView({ initialClients, fetchError }) {
     setLinkError(null);
     setPendingServices([]);
     resetAdder();
-  }, [resetAdder]);
+    resetReassign();
+  }, [resetAdder, resetReassign]);
 
   const serviceNameById = useMemo(() => {
     const map = {};
@@ -287,6 +375,54 @@ export function ClientsView({ initialClients, fetchError }) {
       setClientReceipts((prev) => prev.filter((r) => r.id !== receiptId));
       router.refresh();
     }
+  };
+
+  const handleOpenReassign = (item) => {
+    if (!isEditing || !canEdit) return;
+    setReassignTarget(item);
+    setReassignSearchQuery("");
+    setReassignResults([]);
+    setReassignError(null);
+    setReassignSelectedClientId(null);
+    setIsReassigning(false);
+  };
+
+  const handleCloseReassign = () => {
+    resetReassign();
+  };
+
+  const handleReassignSearchChange = (event) => {
+    setReassignSearchQuery(event.target.value);
+    setReassignSelectedClientId(null);
+    setReassignError(null);
+  };
+
+  const handleSelectClientForReassign = async (client) => {
+    if (!reassignTarget?.id || !client?.id || isReassigning) return;
+
+    setReassignSelectedClientId(client.id);
+    setIsReassigning(true);
+    setReassignError(null);
+
+    const result = await reassignReceiptToClientAction(
+      reassignTarget.id,
+      client.id
+    );
+
+    if (result.error) {
+      setIsReassigning(false);
+      setReassignSelectedClientId(null);
+      setReassignError(result.error);
+      return;
+    }
+
+    const receiptsRes = await getClientReceiptsAction(formOpen.id);
+    if (!receiptsRes.error) {
+      setClientReceipts(receiptsRes.receipts ?? []);
+    }
+
+    resetReassign();
+    router.refresh();
   };
 
   const handleStartEdit = (item) => {
@@ -725,16 +861,16 @@ export function ClientsView({ initialClients, fetchError }) {
                     className="flex shrink-0 items-center border-r border-zinc-300 bg-zinc-50 px-3 text-sm font-medium text-zinc-600 dark:border-zinc-600 dark:bg-zinc-800/80 dark:text-zinc-300"
                     aria-hidden
                   >
-                    {EL_SALVADOR_PHONE_PREFIX}
+                    +{EL_SALVADOR_PHONE_PREFIX}
                   </span>
                   <input
                     id="client-phone"
                     type="tel"
                     inputMode="numeric"
                     autoComplete="tel-national"
-                    maxLength={8}
-                    placeholder="70000000"
-                    value={formData.phone_number}
+                    maxLength={9}
+                    placeholder="0000 0000"
+                    value={formatLocalElSalvadorPhoneInput(formData.phone_number)}
                     onChange={(e) =>
                       setFormData((prev) => ({
                         ...prev,
@@ -746,9 +882,6 @@ export function ClientsView({ initialClients, fetchError }) {
                     aria-label="Número de teléfono de El Salvador"
                   />
                 </div>
-                <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
-                  Se guarda como {EL_SALVADOR_PHONE_PREFIX} + 8 dígitos
-                </p>
               </div>
               <div>
                 <label
@@ -906,7 +1039,19 @@ export function ClientsView({ initialClients, fetchError }) {
                                     </button>
                                   </>
                                 ) : (
-                                  <div className="flex items-center gap-1">
+                                  <div className="flex flex-wrap items-center justify-end gap-2">
+                                    {isEditing && canEdit ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenReassign(item)}
+                                        disabled={isUnlinking}
+                                        className="text-xs font-medium text-emerald-600 hover:underline disabled:opacity-50 dark:text-emerald-400"
+                                        aria-label={`Reasignar ${item.accountNumber} a otro cliente`}
+                                      >
+                                        Reasignar
+                                      </button>
+                                    ) : null}
+                                    <div className="flex items-center gap-1">
                                     <ActionIconButton
                                       label={`Editar ${item.accountNumber}`}
                                       tone="info"
@@ -931,6 +1076,7 @@ export function ClientsView({ initialClients, fetchError }) {
                                     >
                                       <Trash2 className="h-4 w-4" aria-hidden />
                                     </ActionIconButton>
+                                    </div>
                                   </div>
                                 )}
                               </div>
@@ -1137,6 +1283,157 @@ export function ClientsView({ initialClients, fetchError }) {
                 aria-label="Eliminar cliente"
               >
                 {isDeleting ? "Eliminando…" : "Eliminar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reassign service to another client */}
+      {reassignTarget && (
+        <div
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="reassign-dialog-title"
+          aria-describedby="reassign-dialog-desc"
+        >
+          <div
+            className="flex w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-zinc-200/80 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900 max-h-[90dvh]"
+            onKeyDown={(e) => e.key === "Escape" && !isReassigning && handleCloseReassign()}
+          >
+            <div className="shrink-0 border-b border-zinc-200/80 px-6 py-5 dark:border-zinc-800">
+              <h2
+                id="reassign-dialog-title"
+                className="text-xl font-bold text-zinc-900 dark:text-zinc-50"
+              >
+                Reasignar servicio
+              </h2>
+              <p
+                id="reassign-dialog-desc"
+                className="mt-2 text-sm text-zinc-600 dark:text-zinc-400"
+              >
+                Busca el cliente al que pertenecerá ahora este número de servicio.
+              </p>
+              <div className="mt-4 rounded-xl border border-zinc-200/80 bg-zinc-50/60 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-800/50">
+                <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  Servicio a reasignar
+                </p>
+                <p className="mt-1 font-semibold text-zinc-900 dark:text-zinc-50">
+                  {serviceNameById[reassignTarget.serviceId] ?? "Servicio"}
+                </p>
+                <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                  {reassignTarget.accountNumber}
+                </p>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+              <label
+                htmlFor="reassign-client-search"
+                className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              >
+                Buscar cliente
+              </label>
+              <input
+                id="reassign-client-search"
+                type="search"
+                value={reassignSearchQuery}
+                onChange={handleReassignSearchChange}
+                placeholder="Nombre o teléfono del cliente"
+                autoComplete="off"
+                disabled={isReassigning}
+                className={inputClass}
+                aria-label="Buscar cliente por nombre o teléfono"
+                aria-busy={isReassignSearchLoading || isReassigning}
+                autoFocus
+              />
+
+              <div
+                className="mt-4 overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900"
+                role="region"
+                aria-label="Resultados de búsqueda de clientes"
+                aria-live="polite"
+              >
+                {isReassigning ? (
+                  <p className="px-4 py-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
+                    Reasignando servicio…
+                  </p>
+                ) : trimmedReassignSearchQuery.length < MIN_CLIENT_SEARCH_LENGTH ? (
+                  <p className="px-4 py-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
+                    Escribe al menos {MIN_CLIENT_SEARCH_LENGTH} caracteres para buscar
+                  </p>
+                ) : isReassignSearchLoading ? (
+                  <p className="px-4 py-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
+                    Buscando clientes…
+                  </p>
+                ) : filteredReassignResults.length === 0 ? (
+                  <p className="px-4 py-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
+                    No se encontraron otros clientes
+                  </p>
+                ) : (
+                  <ul className="max-h-[min(40vh,18rem)] divide-y divide-zinc-100 overflow-y-auto p-1 dark:divide-zinc-800">
+                    {filteredReassignResults.map((client) => {
+                      const fullName = getClientFullName(client);
+                      const phone = formatElSalvadorPhoneDisplay(client.phone_number);
+                      const label = phone ? `${fullName} · ${phone}` : fullName;
+
+                      return (
+                        <li key={client.id}>
+                          <button
+                            type="button"
+                            onClick={() => handleSelectClientForReassign(client)}
+                            className={`flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900 ${
+                              reassignSelectedClientId === client.id
+                                ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200"
+                                : "text-zinc-800 hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-800/80"
+                            }`}
+                            aria-label={`Reasignar servicio a ${label}`}
+                            aria-pressed={reassignSelectedClientId === client.id}
+                          >
+                            <span
+                              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-zinc-200 bg-zinc-100 text-sm font-semibold text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                              aria-hidden
+                            >
+                              {(client.name ?? "?").charAt(0).toUpperCase()}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-medium">
+                                {fullName}
+                              </span>
+                              {phone ? (
+                                <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">
+                                  {phone}
+                                </span>
+                              ) : null}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+
+              {reassignError ? (
+                <div
+                  role="alert"
+                  className="mt-4 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-300"
+                >
+                  {reassignError}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="shrink-0 border-t border-zinc-200/80 px-6 py-4 dark:border-zinc-800">
+              <button
+                type="button"
+                onClick={handleCloseReassign}
+                disabled={isReassigning}
+                className="w-full rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm font-medium text-zinc-700 transition-all hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                aria-label="Cancelar reasignación"
+              >
+                Cancelar
               </button>
             </div>
           </div>

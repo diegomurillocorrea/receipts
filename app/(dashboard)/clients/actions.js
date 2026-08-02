@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/auth/permissions";
 
 const EL_SALVADOR_COUNTRY_CODE = "503";
+const SEARCH_MIN_LENGTH = 2;
+const SEARCH_CLIENTS_LIMIT = 25;
 
 /**
  * @typedef {Object} ClientFormData
@@ -385,5 +387,115 @@ export async function deleteReceiptByIdAction(receiptId) {
 
   revalidatePath("/clients");
   revalidatePath("/");
+  return { error: null };
+}
+
+/**
+ * Search clients by name, last name, or phone number.
+ * @param {string} query
+ * @returns {Promise<{ error: string | null; clients?: { id: string; name: string; last_name: string; phone_number: string | null }[] }>}
+ */
+export async function searchClientsAction(query) {
+  const auth = await requirePermission("clients", "view");
+  if (auth.error) return { error: auth.error };
+
+  const q = (query ?? "").trim();
+  if (q.length < SEARCH_MIN_LENGTH) {
+    return { clients: [] };
+  }
+
+  const supabase = await createClient();
+  const pattern = `%${q}%`;
+  const digits = q.replace(/\D/g, "");
+
+  const conditions = [
+    `name.ilike.${pattern}`,
+    `last_name.ilike.${pattern}`,
+    `phone_number.ilike.${pattern}`,
+  ];
+  if (digits.length >= 2) {
+    conditions.push(`phone_number.ilike.%${digits}%`);
+  }
+
+  const { data, error } = await supabase
+    .from("clients")
+    .select("id, name, last_name, phone_number")
+    .or(conditions.join(","))
+    .order("name", { ascending: true })
+    .limit(SEARCH_CLIENTS_LIMIT);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  return { clients: data ?? [] };
+}
+
+/**
+ * Move a linked service account from one client to another.
+ * @param {string} receiptId
+ * @param {string} newClientId
+ * @returns {Promise<{ error: string | null }>}
+ */
+export async function reassignReceiptToClientAction(receiptId, newClientId) {
+  const auth = await requirePermission("clients", "edit");
+  if (auth.error) return { error: auth.error };
+
+  const rid = (receiptId ?? "").trim();
+  const cid = (newClientId ?? "").trim();
+
+  if (!rid || !cid) {
+    return { error: "El servicio y el nuevo cliente son requeridos." };
+  }
+
+  const supabase = await createClient();
+
+  const { data: receipt, error: receiptError } = await supabase
+    .from("receipts")
+    .select("id, client_id, service_id, account_receipt_number")
+    .eq("id", rid)
+    .maybeSingle();
+
+  if (receiptError) {
+    return { error: receiptError.message };
+  }
+  if (!receipt) {
+    return { error: "El servicio vinculado no fue encontrado." };
+  }
+  if (receipt.client_id === cid) {
+    return { error: "Este servicio ya pertenece a ese cliente." };
+  }
+
+  const { data: newClient, error: clientError } = await supabase
+    .from("clients")
+    .select("id")
+    .eq("id", cid)
+    .maybeSingle();
+
+  if (clientError) {
+    return { error: clientError.message };
+  }
+  if (!newClient) {
+    return { error: "El cliente seleccionado no fue encontrado." };
+  }
+
+  const { error } = await supabase
+    .from("receipts")
+    .update({ client_id: cid })
+    .eq("id", rid);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  revalidatePath("/clients");
+  revalidatePath("/");
+  if (receipt.service_id && receipt.account_receipt_number) {
+    revalidatePath(`/${receipt.service_id}`);
+    revalidatePath(
+      `/${receipt.service_id}/${encodeURIComponent(receipt.account_receipt_number)}`
+    );
+  }
+
   return { error: null };
 }
